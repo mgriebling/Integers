@@ -75,16 +75,16 @@ public struct Integer : Codable {
         self.negative = negative
     }
     
-    init (_ str: String, withBase: Int) {
+    public init (_ str: String, withBase: Int) {
         self.init()
         self = Integer.fromString(str, inputBase: withBase)
     }
     
-    init(_ int : Int) {
+    public init(_ int : Int) {
         self.init(exactly: int)
     }
     
-    init (_ d: Double) {
+    public init (_ d: Double) {
         self.init(Int(d))
     }
     
@@ -100,7 +100,7 @@ public struct Integer : Codable {
         else { self.init(s, withBase: 10) }
     }
     
-    func isEqual (_ n: Integer) -> Bool { return digit == n.digit && negative == n.negative }
+    public func isEqual (_ n: Integer) -> Bool { return digit == n.digit && negative == n.negative }
     
     fileprivate static func Normalize(_ a: inout Integer) {
         let size = a.digit.count
@@ -164,7 +164,7 @@ public struct Integer : Codable {
         return ldexp(x, Int32(e) * Integer.shift)
     }
     
-    func scaledDouble() -> (x: Double, e: Int) {
+    public func scaledDouble() -> (x: Double, e: Int) {
         let nBitsWanted = 57    // maximum bits in Double
         var nBitsNeeded = nBitsWanted - 1
         var i = digit.count
@@ -184,7 +184,7 @@ public struct Integer : Codable {
         return (x: negative ? -x : x, e: i)
     }
     
-    func cmp (_ b: Integer) -> Int {
+    public func cmp (_ b: Integer) -> Int {
         let sizea = digit.count
         let sizeb = b.digit.count
         if sizea > sizeb {
@@ -279,7 +279,7 @@ public struct Integer : Codable {
     
     /// Add *self* to *b* and return the sum.
     /// - Note: Subtraction is performed by *self.add(b.negate())*.
-    func add (_ b: Integer) -> Integer {
+    public func add (_ b: Integer) -> Integer {
         if negative {
             if b.negative {
                 var z = Integer.AddAbs(self, b:b)
@@ -293,7 +293,7 @@ public struct Integer : Codable {
         }
     }
     
-    func mul (_ b: Integer) -> Integer {
+    public func mul (_ b: Integer) -> Integer {
         var z = Integer.MulAbs(self, b:b)
         if negative != b.negative { z.negative = !z.negative }
         return z
@@ -436,7 +436,7 @@ public struct Integer : Codable {
         }
     } // DivRem;
     
-    func divMod (_ w: Integer) -> (div: Integer, mod: Integer) {
+    public func divMod (_ w: Integer) -> (div: Integer, mod: Integer) {
         let x = Integer.DivRem(self, b:w)
 //        if (x.mod.isNegative && !w.isNegative) || (!x.mod.isNegative && w.isNegative) {
 //            return (div: x.div - 1, mod: x.mod + w)
@@ -444,18 +444,18 @@ public struct Integer : Codable {
         return x
     } // DivMod;
     
-    func div (_ w: Integer) -> Integer {
+    public func div (_ w: Integer) -> Integer {
         let (div, _) = self.divMod(w)
         return div
     } // Div;
     
-    func mod (_ w: Integer) -> Integer {
+    public func mod (_ w: Integer) -> Integer {
         let (_, mod) = self.divMod(w)
         return mod
     } // Mod;
     
     /** Convert an *Integer* object to a string, using a given conversion base.  */
-    func description (_ outputBase: Int) -> String {
+    public func description (_ outputBase: Int) -> String {
         let conversion : String = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         var str = ""
         let sizeA = self.digit.count
@@ -558,13 +558,13 @@ public struct Integer : Codable {
     }
     
     /** Bitwise signed 1's complement.  The result equals -(a+1).  */
-    func invert() -> Integer {
+    public func invert() -> Integer {
         var a = Integer.mulAdd(self, n: 1, add: 1)  // self.add(Integer.one)
         a.negative = !negative
         return a
     } // Invert;
     
-    func lShift (_ n: Int) -> Integer {
+    public func lShift (_ n: Int) -> Integer {
         assert(n >= 0, "lShift assertion: shift is negative")
         let wordShift = n / Int(Integer.shift)
         let remShift = TwoDigits(Digit(n) % Integer.shift)
@@ -592,7 +592,7 @@ public struct Integer : Codable {
         return z
     } // LShift;
     
-    func rShift (_ n: Int) -> Integer {
+    public func rShift (_ n: Int) -> Integer {
         assert(n >= 0, "rShift assertion: shift is negative")
         if negative {
             let a = self.invert().rShift(n)
@@ -625,7 +625,7 @@ public struct Integer : Codable {
     /// Euclid's gcd algorithm  (very elegant and very ancient!)
     ///  - Returns: Greatest common divisor of *m* and *n* where *m* = *self*
     ///  - Precondition: m ≥ n, n > 0
-    func gcd (_ n: Integer) -> Integer {
+    public func gcd (_ n: Integer) -> Integer {
         var x = self.abs()
         var y = n.abs()
         
@@ -641,7 +641,7 @@ public struct Integer : Codable {
     
     /// - Returns: x^exp where x = *self*.
     /// - Precondition: x ≥ 0
-    func power (_ exp: Int) -> Integer {
+    public func power (_ exp: Int) -> Integer {
         var x = self
         var lexp = exp
         if exp<0 { return Integer.zero }  /* x**-exp = 0 */
@@ -656,7 +656,7 @@ public struct Integer : Codable {
     
     /// - Returns: x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// - Precondition: *x* ≥ 0
-    func factorial () -> Integer {
+    public func factorial () -> Integer {
         let x = self.integer
         if x < 0 { return Integer.zero }    /* out of range */
         if x < 2 { return Integer.one }        /* 0! & 1! */
@@ -671,7 +671,7 @@ public struct Integer : Codable {
     /** - Returns: *digits*-length random number.
     Note: Actual number of digits ≥ *digits*.
     Default length for digits ≦ 0 is 50. */
-    static func random (_ digits: Int = 0) -> Integer {
+    static public func random (_ digits: Int = 0) -> Integer {
         let B = mask
         let defaultDigits = 50
         let udigits = Double(digits <= 0 ? defaultDigits : digits)
