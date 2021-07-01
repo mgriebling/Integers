@@ -1,6 +1,6 @@
 /**
 Implements integer values of arbitrary magnitude.
-Copyright (c) 2002, 2003 Michael van Acken and Michael Griebling
+Copyright © 2002, 2003, 2015 Michael van Acken and Michael Griebling
 
 This module is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public License
@@ -13,19 +13,16 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public
-License along with OOC. If not, write to the Free Software Foundation,
+License along with Integers. If not, write to the Free Software Foundation,
 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 This module is a reformulation of (parts of) Python's *longobject.c*
-in Oberon-2.  Optimizations like Karatsuba multiplication and string
+in Swift.  Optimizations like Karatsuba multiplication and string
 conversion for power of two base have been omitted.  All errors are mine,
 of course.
 
 Added algorithms are from Knuth: "The Art Of Computer Programming",
 Vol 2, section 4.3.1
-
-Adapted to latest oo2c library routines including Boxed Objects
-and Boxed Strings by Michael Griebling, 8 Nov 2003.
 
 Ported to Swift by Michael Griebling, 18 July 2015.
 */
