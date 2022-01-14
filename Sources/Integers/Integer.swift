@@ -71,6 +71,14 @@ public struct Integer : Codable {
         self = Integer.fromString(str, inputBase: withBase)
     }
     
+    public init(_ int : Int) {
+        self.init(exactly: int)
+    }
+    
+    public init (_ d: Double) {
+        self.init(Int(d))
+    }
+    
     public init (_ int : Int) { self.init(exactly: int) }
     
     /// Creates an Integer from a string with base 10 as a default.
@@ -149,7 +157,7 @@ public struct Integer : Codable {
         return ldexp(x, Int32(e) * Integer.shift)
     }
     
-    func scaledDouble() -> (x: Double, e: Int) {
+    public func scaledDouble() -> (x: Double, e: Int) {
         let nBitsWanted = 57    // maximum bits in Double
         var nBitsNeeded = nBitsWanted - 1
         var i = digit.count
@@ -169,7 +177,7 @@ public struct Integer : Codable {
         return (x: negative ? -x : x, e: i)
     }
     
-    func cmp (_ b: Integer) -> Int {
+    public func cmp (_ b: Integer) -> Int {
         let sizea = digit.count
         let sizeb = b.digit.count
         if sizea > sizeb {
