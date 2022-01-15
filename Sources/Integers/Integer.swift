@@ -43,6 +43,16 @@ public struct Integer : Codable {
     
     static let defaultDigits = 50
     
+    static let factInterval = 50    // Factorial table interval
+    static let factEnd = 1000       // End of factorial table
+    
+    /* For exponentiation, use the binary left-to-right algorithm
+     * unless the exponent contains more than FIVEARY_CUTOFF digits.
+     * In that case, do 5 bits at a time.  The potential drawback is that
+     * a table of 2**5 intermediate results is computed.
+     */
+    static let FIVEARY_CUTOFF = 8
+    
     /// Stores an integer number of arbitrary size.  The absolute value of a
     /// number is equal to *∑ digit[i]\*2^(shift\*i)* for 0 ≤ *i* < *size* where
     /// *size* = `digit.count`.  Negative numbers are represented
@@ -55,12 +65,6 @@ public struct Integer : Codable {
     static public let zero = Integer()
     static public let one = Integer(1)
     
-    fileprivate static var powerOf2 : [Int] {
-        var array = [Int](repeating: -1, count: 38)
-        array[2] = 1; array[4] = 2; array[8] = 3; array[16] = 4; array[32] = 5
-        return array
-    }
-    
     public init (size : Int = 0, negative: Bool = false) {
         digit = [Digit](repeating: 0, count: size)
         self.negative = negative
@@ -69,14 +73,6 @@ public struct Integer : Codable {
     public init (_ str: String, withBase: Int) {
         self.init()
         self = Integer.fromString(str, inputBase: withBase)
-    }
-    
-    public init(_ int : Int) {
-        self.init(exactly: int)
-    }
-    
-    public init (_ d: Double) {
-        self.init(Int(d))
     }
     
     public init (_ int : Int) { self.init(exactly: int) }
@@ -243,31 +239,35 @@ public struct Integer : Codable {
     /// Grade school multiplication, ignoring the signs.
     /// Returns: The absolute value of the product of *a* and *b*.
     fileprivate static func mulAbs (_ a: Integer, b: Integer) -> Integer {
-        var carry: TwoDigits
-        let sizeA = a.digit.count
-        let sizeB = b.digit.count
-        var z = Integer(size:sizeA+sizeB)
-        
-        for i in 0..<sizeA {
-            let f = TwoDigits(a.digit[i])
-            carry = 0
-            for j in 0..<sizeB {
-                carry += TwoDigits(z.digit[i+j]) + TwoDigits(b.digit[j]) * f
-                assert(carry >= 0, "\(#function): carry < 0")
-                z.digit[i+j] = Digit(carry & TwoDigits(mask))
-                carry >>= TwoDigits(shift)
+        if a == b {
+            return a.sqr()  // about twice as fast
+        } else {
+            var carry: TwoDigits
+            let sizeA = a.digit.count
+            let sizeB = b.digit.count
+            var z = Integer(size:sizeA+sizeB)
+            
+            for i in 0..<sizeA {
+                let f = TwoDigits(a.digit[i])
+                carry = 0
+                for j in 0..<sizeB {
+                    carry += TwoDigits(z.digit[i+j]) + TwoDigits(b.digit[j]) * f
+                    assert(carry >= 0, "\(#function): carry < 0")
+                    z.digit[i+j] = Digit(carry & TwoDigits(mask))
+                    carry >>= TwoDigits(shift)
+                }
+                var j = sizeB
+                while carry != 0 {
+                    carry += TwoDigits(z.digit[i+j])
+                    assert(carry >= 0, "\(#function): carry < 0")
+                    z.digit[i+j] = Digit(carry & TwoDigits(mask))
+                    carry >>= TwoDigits(shift)
+                    j += 1
+                }
             }
-            var j = sizeB
-            while carry != 0 {
-                carry += TwoDigits(z.digit[i+j])
-                assert(carry >= 0, "\(#function): carry < 0")
-                z.digit[i+j] = Digit(carry & TwoDigits(mask))
-                carry >>= TwoDigits(shift)
-                j += 1
-            }
+            normalize(&z)
+            return z
         }
-        normalize(&z)
-        return z
     } // MulAbs;
     
     /// Add *self* to *b* and return the sum.
@@ -335,7 +335,6 @@ public struct Integer : Codable {
         z.digit[sizeA] = Digit(carry)
         normalize(&z)
         a = z
-//        return z
     }
     
     /// Unsigned long division with remainder
@@ -451,22 +450,23 @@ public struct Integer : Codable {
         
         if sizeA == 0 {
             return "0"
-        } else if Integer.powerOf2[outputBase] > 0 {
-            let baseBits = Integer.powerOf2[outputBase]
+        } else if outputBase & (outputBase-1) == 0 {
+            // special case where radix is power of two
+            let baseBits = outputBase.trailingZeroBitCount
             let mask = TwoDigits(outputBase - 1)
             var accum: TwoDigits = 0
-            var accumBits = 0
+            var accumBits = TwoDigits(0)
             
             for i in 0..<sizeA {
-                accum += TwoDigits(digit[i]) << TwoDigits(accumBits)
-                accumBits += Int(Integer.shift)
+                accum |= TwoDigits(digit[i]) << accumBits
+                accumBits += TwoDigits(Integer.shift)
                 assert(accumBits >= baseBits, "\(#function): Failed power of two check")
                 repeat {
                     let d = Int(accum & mask)
                     assert(d >= 0, "\(#function): d < 0")
                     let c = Integer.baseDigits[d]
                     str = String(c) + str
-                    accumBits -= baseBits
+                    accumBits -= TwoDigits(baseBits)
                     accum = accum >> TwoDigits(baseBits)
                 } while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
             }
@@ -529,24 +529,58 @@ public struct Integer : Codable {
             }
         }
         
-        var z = Integer.zero
         let upperCharacter = String(baseDigits[inputBase-1])
-        var divisors = [Int]()
-        var x = 1
-        for _ in 1...s.count {
-            x *= inputBase
-            if x > base { break }
-            divisors.append(x)
-        }
-        while !s.isEmpty {
-            var si = ""; si.reserveCapacity(divisors.count)
-            for _ in 1...divisors.count where !s.isEmpty {
-                si.append(s.removeFirst())
+        var z = Integer.zero
+        if inputBase & (inputBase-1) == 0 {
+            // handle power-of-two radices
+            let bitsPerDigit = inputBase.trailingZeroBitCount
+            let n = (bitsPerDigit * s.count + Int(shift) - 1) / Int(shift)  // how many words we need
+            z = Integer(size: n)
+            var accum = TwoDigits(0)
+            var bitsInAccum = 0
+            var i = 0
+            while !s.isEmpty {
+                let c = String(s.removeFirst())
+                if let k = Int(c, radix: inputBase) {
+                    accum <<= bitsPerDigit
+                    accum |= TwoDigits(k)
+                    bitsInAccum += bitsPerDigit
+                    if bitsInAccum >= shift {
+                        z.digit[i] = Digit(accum & TwoDigits(mask)); i+=1
+                        assert(i <= n, "Not enough digits in z")
+                        accum >>= shift
+                        bitsInAccum -= Int(shift)
+                        assert(bitsInAccum < shift, "Too many bits")
+                    }
+                } else {
+                    assertionFailure("\(#function): character '\(c)' must be '0' to '\(upperCharacter)'")
+                }
             }
-            if let d = Int(si, radix: inputBase) {
-                Integer.mulAdd(&z, n:Digit(divisors[si.count-1]), add:Digit(d))
-            } else {
-                assertionFailure("\(#function): string characters \"\(si)\" must be '0' to '\(upperCharacter)'")
+            if bitsInAccum > 0 {
+                assert(bitsInAccum <= shift, "Too many bits")
+                z.digit[i] = Digit(accum); i+=1
+                assert(i <= n, "Not enough digits in z")
+            }
+            normalize(&z)
+        } else {
+            // other radices like 10
+            var divisors = [Int]()
+            var x = 1
+            for _ in 1...s.count {
+                x *= inputBase
+                if x > base { break }
+                divisors.append(x)
+            }
+            while !s.isEmpty {
+                var si = ""; si.reserveCapacity(divisors.count)
+                for _ in 1...divisors.count where !s.isEmpty {
+                    si.append(s.removeFirst())
+                }
+                if let d = Int(si, radix: inputBase) {
+                    Integer.mulAdd(&z, n:Digit(divisors[si.count-1]), add:Digit(d))
+                } else {
+                    assertionFailure("\(#function): string characters \"\(si)\" must be '0' to '\(upperCharacter)'")
+                }
             }
         }
         z.negative = negative
@@ -640,20 +674,63 @@ public struct Integer : Codable {
         return x
     }
     
-    /// Returns x^exp where x = *self*.
-    /// Precondition: exp ≥ 0
-    public func power (_ exp: Int) -> Integer {
-        guard exp>=0 else { return Integer.zero }  /* x**-exp = 0 */
+    /// Returns x^b where x = *self*.
+    /// Precondition: b ≥ 0
+    public func power (_ b: Integer) -> Integer {
+        guard b>=0 else { return Integer.zero }  /* x**-exp = 0 */
         var x = self
-        var lexp = exp
         var y = Integer.one
-        while lexp > 0 {
-            if !lexp.isMultiple(of: 2) { y*=x }
-            lexp >>= 1
-            if lexp > 0 { x*=x }
+        if self.digit.count <= Integer.FIVEARY_CUTOFF {
+            // use the straight-forward algorithm (HAC Algorithm 14.79)
+            var lexp = b
+            while lexp > 0 {
+                if !lexp.isMultiple(of: 2) { y*=x }
+                lexp >>= 1
+                if lexp > 0 { x=x.sqr() }
+            }
+        } else {
+            // Left-to-right 5-ary exponentiation (HAC Algorithm 14.82)
+            var table = [Integer](); table.reserveCapacity(32)
+            table.append(y)
+            for i in 1..<32 { table.append(table[i-1] * x) }
+        
+            for i in stride(from: b.digit.count-1, through: 0, by: -1) {
+                let bi = b.digit[i]
+                for j in stride(from: Integer.shift-5, through: 0, by: -5) {
+                    let index = Int((bi >> j)) & 0x1F
+                    for _ in 0..<5 { y = y.sqr() }
+                    if index != 0 { y = y * table[index] }
+                }
+            }
         }
         return y
     }
+    
+    /// Returns x^2 where x = *self*.
+    /// This method requires around half the operations of x \* x.
+    /// Using algorithm 14.16 from *Handbook of Applied Cryptography*.
+    public func sqr () -> Integer {
+        typealias Digit2 = Integer.TwoDigits
+        let digits = self.digit.count
+        let mask = Integer.TwoDigits(Integer.mask)
+        var w = Integer(size:digits*2)
+        let x = self.digit
+        for i in 0..<digits {
+            let xi = Digit2(x[i])
+            var uv = Digit2(w.digit[2*i])+xi*xi
+            w.digit[2*i] = Integer.Digit(uv & mask)
+            var c = uv >> Integer.shift
+            for j in (i+1)..<digits {
+                uv = Digit2(w.digit[i+j]) + 2*Digit2(x[j])*xi + c
+                w.digit[i+j] = Integer.Digit(uv & mask)
+                c = uv >> Integer.shift
+            }
+            w.digit[i+digits] = Digit(c)
+        }
+        Integer.normalize(&w)
+        return w
+    }
+
     
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
@@ -665,10 +742,11 @@ public struct Integer : Codable {
         
         var f = Integer.one
         var start = Digit(2)
-        if x > 50 && x <= 1000 {
-            let index = (x - 50) / 50
+        let factInt = Integer.factInterval
+        if x > factInt && x <= Integer.factEnd {
+            let index = (x - factInt) / factInt
             f = Integer.factTable[index]
-            start = Digit(index * 50 + 51)
+            start = Digit(index * factInt + factInt+1)
             if start > x { return f }
         }
 
@@ -683,9 +761,9 @@ public struct Integer : Codable {
     static private var factTable : [Integer] = {
         var facts = [Integer]()
         var f = Integer.one
-        for lx in 2...Digit(1000) {
+        for lx in 2...Digit(Integer.factEnd) {
             Integer.mulAdd(&f, n: lx, add: 0)  /* f=f*x */
-            if lx.isMultiple(of: 50) {
+            if lx.isMultiple(of: Digit(Integer.factInterval)) {
                 var s = f
                 Integer.normalize(&s)
                 facts.append(s)
@@ -779,9 +857,9 @@ public struct Integer : Codable {
     /// Returns *self* with *bit* toggled in the receiver.
     @inlinable func toggleBit(_ bit: Int) -> Integer { self ^ (1 << bit) }
     
-    @inlinable static public func ** (base: Integer, power: Int) -> Integer { base.power(power) }
+    @inlinable static public func ** (base: Integer, power: Integer) -> Integer { base.power(power) }
     
-} // Integer
+}
 
 // Definition of power operator
 infix operator ** : ExponentPrecedence
@@ -790,7 +868,7 @@ precedencegroup ExponentPrecedence {
     higherThan: MultiplicationPrecedence
 }
 
-@inlinable public func ** (base: Int, power: Int) -> Integer { Integer(base) ** power }
+@inlinable public func ** (base: Int, power: Int) -> Integer { Integer(base) ** Integer(power) }
 
 extension Integer : CustomStringConvertible {
     public var description: String { self.description(10) }
@@ -806,7 +884,6 @@ extension Integer : CustomDebugStringConvertible {
         s += ", base=\(Integer.base)"
         return s
     }
-    
 }
 
 extension Integer : ExpressibleByStringLiteral {
@@ -884,10 +961,13 @@ extension Integer : BinaryInteger {
     public typealias Words = [UInt]
     
     public var bitWidth: Int { digit.count*Int(Integer.shift) }
-    public var trailingZeroBitCount: Int { digit.reduce(0) { $0 + $1.trailingZeroBitCount } }
+    public var trailingZeroBitCount: Int { digit.reduce(0) { $0 + Swift.min($1.trailingZeroBitCount,Int(Integer.shift)) } }
+    public var nonzeroBitCount: Int { digit.reduce(0) { $0 + $1.nonzeroBitCount } }
+    public var isPowerOfTwo: Bool { self.nonzeroBitCount == 1 }
+    
     public var words : Words { digit.map { UInt($0) } }
     public init<T>(_ source: T) where T : BinaryInteger { self.init(exactly: source) }
-    
+     
     public init<T>(_ source: T) where T : BinaryFloatingPoint {
         var x = source.rounded(.towardZero)  // truncate any decimals
         let sign = x.sign

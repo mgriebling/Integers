@@ -1,9 +1,11 @@
 # Integers
 
-Implements integer values of arbitrary magnitude.  Includes all standard arithmetic and logic operations.
+Implements integer values of arbitrary magnitude. Includes all standard arithmetic and logic operations.
+The *Integer* type is compliant to the *BinaryInteger* and *SignedInteger* Swift protocols.
 A preliminary version of rational numbers is also included with basic arithmetic operations.
-
-Copyright © 2002, 2003, 2015 Michael van Acken and Michael Griebling
+Original Oberon-2 source Copyright © 2002, 2003, 2015 Michael van Acken and Michael Griebling
+Ported to Swift by Michael Griebling, 18 July 2015.
+Swift source Copyright © 2015 - 2022 Michael Griebling
 
 This module is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
 
@@ -11,11 +13,9 @@ This module is distributed in the hope that it will be useful, but WITHOUT ANY W
 
 You should have received a copy of the GNU Lesser General Public License along with Integers. If not, write to the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-This module is a reformulation of (parts of) Python's *longobject.c* in Swift.  Optimizations like Karatsuba multiplication and string conversion for power of two base have been omitted.  All errors are mine, of course.
+This module is a reformulation of (parts of) Python's *longobject.c* in Swift. Optimizations like Karatsuba multiplication and string conversion for power of two base have been omitted.  All errors are mine, of course.
 
 Added algorithms are from Knuth: _The Art Of Computer Programming_, Vol 2, section 4.3.1
-
-Ported to Swift by Michael Griebling, 18 July 2015.
 
 # Examples
 
@@ -38,10 +38,9 @@ Int.min = -9223372036854775808
 
 Integer(1.23456789e+18) = 1234567890000000000
 
-Debug description of Integer(1000) -> 
+Debug description of Integer(69)! -> 
 ```
-[size=1, digits=1000 , base=1073741824]
-[98, 112, 108, 105, 115, 116, 48, 48, 210, 1, 2, 3, 5, 85, 100, 105, 103, 105, 116, 88, 110, 101, 103, 97, 116, 105, 118, 101, 161, 4, 17, 3, 232, 8, 8, 13, 19, 28, 30, 33, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34]
+Dump =  size=11, digits=0 0 208483648 1760158 815281888 388340220 147380948 549955052 405677315 320051255 84005611 , base=1073741824
 ```
 
 **Encoding/decoding test:**

@@ -51,11 +51,11 @@ public struct Rational : Codable, Hashable {
     func div (_ b: Rational) -> Rational { self.mul(b.reciprocal()) }
     
     /// (a/b)^n = a^n / b^n
-    func power (_ n: Int) -> Rational { Rational(numerator:self.n ** n, denominator:self.d ** n) }
+    func power (_ n: Integer) -> Rational { Rational(numerator:self.n ** n, denominator:self.d ** n) }
     func abs () -> Rational { Rational(numerator: n.abs(), denominator: d) }
     func negate() -> Rational { Rational(numerator: -n, denominator: d) }
     
-    static public func ** (base: Rational, power: Int) -> Rational { base.power(power) }
+    static public func ** (base: Rational, power: Integer) -> Rational { base.power(power) }
     
 }
 

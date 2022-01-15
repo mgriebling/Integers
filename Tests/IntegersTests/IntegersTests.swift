@@ -63,7 +63,13 @@
             check("n / m = ", n / m, "2222266652000240026")
             check("n % m = ", n % m, "43398759628555611114")
             check("m*(n / m)+(n % m) = ", m * (n / m) + (n % m), ns)
-            check("2**64 = ", 2 ** 64, "18446744073709551616")
+            let two64 = Integer(-2) ** 64
+            check("2**64 = ", two64, "18446744073709551616")
+            check("2**64.isPowerOfTwo = ", "\(two64.isPowerOfTwo)", "true")
+            if two64.isPowerOfTwo {
+                check("2**64 binary exponent = ", "\(two64.trailingZeroBitCount)", "64")
+            }
+            check("(2**64-1).isPowerOfTwo = ", "\((two64-1).isPowerOfTwo)", "false")
             let ffff = Integer("-0xFFFF")   // or 0x-FFFF will also work
             check("-FFFF = ", ffff, "-65535")
             check2("-FFFF = ", ffff, 16, "-FFFF")
@@ -86,6 +92,19 @@
             check("~0 = ", ~Integer.zero, "-1")
             check("-1 & 0xFFFF = ", Integer(-1) & 0xFFFF, "65535")
             check("-1 & -2 = ", Integer(-1) & Integer(-2), "-2")
+            
+            check("9 % 4 = ", Integer(9) % Integer(4), "1")
+            check("-9 % 4 = ", Integer(-9) % Integer(4), "-1")
+            check("9 % -4 = ", Integer(9) % Integer(-4), "1")
+            check("-9 % -4 = ", Integer(-9) % Integer(4), "-1")
+            
+            check("Integer(1.23456789e+18) = ", Integer(1.23456789e+18), "1234567890000000000")
+            
+            print("Integer sequence in for loop: ")
+            for i in Integer(1)...Integer(4) { print(i) }
+            
+            let x = Integer("1234567890000000000")
+            check("\(x).sqr() = ", x.sqr(), (x*x).description)
         }
         
         func testPerformanceFromString() {
@@ -93,14 +112,32 @@
             let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
             self.measure {
                 // Put the code you want to measure the time of here.
-                for _ in 1...100 { x = Integer(s) }
+                for _ in 1...100 { x = Integer(s, withBase:16) }
             }
             print(x)
         }
         
+//        func testSquaring1() {
+//            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
+//            var y = Integer.zero
+//            self.measure {
+//                for _ in 1...1000 { y = x*x }
+//            }
+//            print(y)
+//        }
+//
+//        func testSquaring2() {
+//            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
+//            var y = Integer.zero
+//            self.measure {
+//                for _ in 1...1000 { y = x.sqr() }
+//            }
+//            print(y)
+//        }
+        
         func testPerformanceFactorial() {
             // This is an example of a performance test case.
-            let x = Integer(1000)
+            let x = Integer(999)
             self.measure {
                 // Put the code you want to measure the time of here.
                 _ = x.factorial()
