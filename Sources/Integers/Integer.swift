@@ -660,7 +660,7 @@ public struct Integer : Codable {
     /// Returns greatest common divisor of *m* and *n* where *m* = *self*
     /// Precondition: m ≥ n, n > 0
     public func gcd (_ n: Integer) -> Integer {
-        assert(!self.isNegative && !n.isNegative, "\(#function): self < 0 or n < 0")
+        assert(!self.isNegative && !n.isNegative, "\(#function): m < 0 or n < 0")
         var x = self.abs()
         var y = n.abs()
         
@@ -735,7 +735,7 @@ public struct Integer : Codable {
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
     public func factorial () -> Integer {
-        assert(!self.isNegative, "(power) Self must be ≥ 0!")
+        assert(!self.isNegative, "\(#function): x must be ≥ 0!")
         let x = self.integer
         if x < 0 { return Integer.zero }  /* out of range */
         if x < 2 { return Integer.one }   /* 0! & 1! */

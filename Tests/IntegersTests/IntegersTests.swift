@@ -112,7 +112,7 @@
             let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
             self.measure {
                 // Put the code you want to measure the time of here.
-                for _ in 1...100 { x = Integer(s, withBase:16) }
+                for _ in 1...100 { x = Integer(s) }
             }
             print(x)
         }
