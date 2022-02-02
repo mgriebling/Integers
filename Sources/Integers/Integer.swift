@@ -661,7 +661,7 @@ public struct Integer : Codable {
     /// Returns greatest common divisor of *m* and *n* where *m* = *self*
     /// Precondition: m ≥ n, n > 0
     public func gcd (_ n: Integer) -> Integer {
-        assert(!self.isNegative && !n.isNegative, "\(#function): m < 0 or n < 0")
+//        assert(!self.isNegative && !n.isNegative, "\(#function): m < 0 or n < 0")
         var x = self.abs()
         var y = n.abs()
         
