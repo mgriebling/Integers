@@ -7,23 +7,26 @@ Original Oberon-2 source Copyright © 2002, 2003, 2015 Michael van Acken and Mic
 Ported to Swift by Michael Griebling, 18 July 2015.
 Swift source Copyright © 2015 - 2022 Michael Griebling
 
-This module is free software; you can redistribute it and/or modify it under the terms of the GNU 
-Lesser General Public License as published by the Free Software Foundation; either version 2 of the 
-License, or (at your option) any later version.
-
-This module is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser 
-General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License along with Integers. If not, 
-write to the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-
 This module is a reformulation of (parts of) Python's *longobject.c* in Swift. Optimizations like 
 Karatsuba multiplication have been omitted.  All errors are mine, of course.
 
 Added algorithms are from Knuth: _The Art Of Computer Programming_, Vol 2, section 4.3.1
 
-# Examples
+## Timing
+
+Some typical performance tests were run on a 3.6 GHz 10-Core Intel Core i9 Mac using Catalyst.
+As a comparison, the same benchmarks were also run using the *BigInt* package by Matthias Zenger.
+In both cases source code is 100% Swift.
+
+The *Integer* package optimizes the integer power function using 5-ary exponentiation for large exponents.
+Number squaring functions have been optimized to be about twice as fast as just multiplying two numbers.
+String to integer conversions for power-of-two bases are about twice as fast as other conversions.
+
+**Results  String to Integer (100 digits, base 10)  Factorial(999)**
+Integer                     192 μS                       19 mS
+BigInt                      461 μS                      167 mS
+
+## Examples
 
 **Check standard Int conversion to Integer:**
 ```

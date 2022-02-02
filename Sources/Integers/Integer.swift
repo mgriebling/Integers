@@ -1,6 +1,12 @@
 import Foundation
 
 /// Implements integer values of arbitrary magnitude.
+/// This module is a reformulation of (parts of) Python's *longobject.c*
+/// in Swift.  Optimizations include string optimizations for conversion
+/// for power of two bases.  All errors are mine, of course.
+/// Added algorithms are from Knuth: *The Art Of Computer Programming*,
+/// Vol 2, section 4.3.1.
+///
 /// Original Oberon-2 source copyright © 2002, 2003, 2015 Michael van Acken
 /// and Michael Griebling
 /// Ported to Swift by Michael Griebling, 18 July 2015.
@@ -20,14 +26,6 @@ import Foundation
 /// License along with Integers. If not, write to the Free Software Foundation,
 /// 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 ///
-/// This module is a reformulation of (parts of) Python's *longobject.c*
-/// in Swift.  Optimizations like Karatsuba multiplication and string
-/// conversion for power of two base have been omitted.  All errors are mine,
-/// of course.
-///
-/// Added algorithms are from Knuth: "The Art Of Computer Programming",
-/// Vol 2, section 4.3.1
-
 public struct Integer : Codable {
     
     /// Basic data type representing one *Digit* of the *Integer*.
@@ -65,16 +63,21 @@ public struct Integer : Codable {
     static public let zero = Integer()
     static public let one = Integer(1)
     
+    /// Creates an Integer composed of *size* *Digit*s where each *Digit* holds
+    /// 30 bits or around 9 decimal digits.
     public init (size : Int = 0, negative: Bool = false) {
         digit = [Digit](repeating: 0, count: size)
         self.negative = negative
     }
     
+    /// Creates an Integer from a string with user-definable radix from 2 to 36.
+    /// Alphabetic characters are used for radices from 11 to 36 as "A" to "Z".
     public init (_ str: String, withBase: Int) {
         self.init()
         self = Integer.fromString(str, inputBase: withBase)
     }
     
+    /// Creates an Integer with the value *int*.
     public init (_ int : Int) { self.init(exactly: int) }
     
     /// Creates an Integer from a string with base 10 as a default.
@@ -135,6 +138,8 @@ public struct Integer : Codable {
     
     public func abs() -> Integer { negative ? -self : self }
     
+    /// Returns a *Int* approximation of *self* where
+    /// very small/large values may return *Int.min* or *Int.max*, respectively.
     public var integer : Int {
         let limit = Int.max / Int(Integer.base)
         var count = digit.count-1
@@ -147,12 +152,16 @@ public struct Integer : Codable {
         return negative ? -Int(int) : Int(int)
     }
     
+    /// Returns a double approximation of *self*.  If *self* is too large,
+    /// infinity is returned.
     public var double : Double {
         let (x, e) = scaledDouble()
         if e > Int(Int32.max / Integer.shift) { return Double.infinity }
         return ldexp(x, Int32(e) * Integer.shift)
     }
     
+    /// Returns a mantissa *x* and exponent *e* approximation of *self*,
+    /// *self* = x \* 2^e
     public func scaledDouble() -> (x: Double, e: Int) {
         let nBitsWanted = 57    // maximum bits in Double
         var nBitsNeeded = nBitsWanted - 1
@@ -173,6 +182,8 @@ public struct Integer : Codable {
         return (x: negative ? -x : x, e: i)
     }
     
+    /// Compares *self* to *b* and returns -1, 0, 1 for the cases where
+    /// self < b, self = b, and self > b, respectively.
     public func cmp (_ b: Integer) -> Int {
         let sizea = digit.count
         let sizeb = b.digit.count
@@ -910,6 +921,7 @@ extension Integer : SignedInteger {
     
     @inlinable public var magnitude: Integer { abs() }
     
+    /// Creates an Integer whose value is exactly equal to *value*.
     public init<T>(exactly value: T) where T : BinaryInteger {
         let maxDigits = (MemoryLayout<T>.size*8+Int(Integer.shift)-2) / Int(Integer.shift)
         var lvalue = value
