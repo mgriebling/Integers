@@ -41,7 +41,7 @@ public struct Integer : Codable {
     fileprivate static let base : Digit = 1 << shift
     fileprivate static let mask : Digit = base - 1
     
-    static let defaultDigits = 50
+    static public let defaultDigits = 50
     
     static let factInterval = 50    // Factorial table interval
     static let factEnd = 1000       // End of factorial table
@@ -59,14 +59,14 @@ public struct Integer : Codable {
     /// with *negative = true*, and zero by *size* = 0.  In a
     /// normalized number, *digit[size-1]* (the most significant digit) is never zero.
     /// For all valid *i*, *0 ≤ digit[i] ≤ mask*.  */
-    fileprivate var digit: [Digit]
+    fileprivate var digit: ContiguousArray<Digit>  //[Digit]
     fileprivate var negative: Bool
     
     static public let zero = Integer()
     static public let one = Integer(1)
     
     public init (size : Int = 0, negative: Bool = false) {
-        digit = [Digit](repeating: 0, count: size)
+        digit = ContiguousArray<Digit>(repeating: 0, count: size)
         self.negative = negative
     }
     
@@ -298,7 +298,7 @@ public struct Integer : Codable {
     /// *pin=pout* on entry, which saves oodles of mallocs/frees in
     /// Integer format, but that should be done with great care since Integers are
     /// immutable.
-    fileprivate static func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
+    fileprivate static func inplaceDivRem1 (_ pout: inout ContiguousArray<Digit>, pin: ContiguousArray<Digit>, psize: Int, n: Digit) -> Digit {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         var rem: TwoDigits = 0
         for size in (0..<psize).reversed() {
@@ -443,7 +443,7 @@ public struct Integer : Codable {
     } // Mod;
     
     /** Convert an *Integer* object to a string, using a given conversion base.  */
-    func description (_ outputBase: Int) -> String {
+    public func description (_ outputBase: Int) -> String {
         var str = ""
         let sizeA = self.digit.count
         assert(outputBase >= 2 && outputBase <= 36, "\(#function): 2 ≤ base ≤ 36")
@@ -511,7 +511,8 @@ public struct Integer : Codable {
         return negative ? "-" + str : str
     }
     
-    static func fromString (_ str: String, inputBase: Int) -> Integer {
+    /// Converts a string *str* to an Integer using digits from the *inputBase*.
+    static public func fromString (_ str: String, inputBase: Int) -> Integer {
         assert(2 <= inputBase && inputBase <= 36, "\(#function): 2 ≤ inputBase ≤ 36")
         
         var negative = false
@@ -782,7 +783,7 @@ public struct Integer : Codable {
     /// Returns a decimal *digits*-length random number.
     /// Note: Actual number of digits ≥ *digits*.
     /// Default length for digits ≦ 0 is ≅ 50.
-    static func random (_ digits: Int = defaultDigits) -> Integer {
+    public static func random (_ digits: Int = defaultDigits) -> Integer {
         let B = mask
         let udigits = digits <= 0 ? defaultDigits : digits
         var n = Integer(size: toDigits(decimalDigits: udigits))
