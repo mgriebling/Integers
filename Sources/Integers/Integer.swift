@@ -33,7 +33,7 @@ public struct Integer : Codable {
     fileprivate typealias TwoDigits = Int64
     
     /// Number of bits in a *Digit*.  Minimum is 6.
-    fileprivate static let shift : Digit = 30
+    static public let shift : Digit = 30
     
     /// Modulo base of a *Digit* = 2^shift
     fileprivate static let base : Digit = 1 << shift
@@ -57,7 +57,7 @@ public struct Integer : Codable {
     /// with *negative = true*, and zero by *size* = 0.  In a
     /// normalized number, *digit[size-1]* (the most significant digit) is never zero.
     /// For all valid *i*, *0 ≤ digit[i] ≤ mask*.  */
-    fileprivate var digit: ContiguousArray<Digit>  //[Digit]
+    fileprivate var digit: [Digit]
     fileprivate var negative: Bool
     
     static public let zero = Integer()
@@ -66,7 +66,7 @@ public struct Integer : Codable {
     /// Creates an Integer composed of *size* *Digit*s where each *Digit* holds
     /// 30 bits or around 9 decimal digits.
     public init (size : Int = 0, negative: Bool = false) {
-        digit = ContiguousArray<Digit>(repeating: 0, count: size)
+        digit = [Digit](repeating: 0, count: size)
         self.negative = negative
     }
     
@@ -309,7 +309,7 @@ public struct Integer : Codable {
     /// *pin=pout* on entry, which saves oodles of mallocs/frees in
     /// Integer format, but that should be done with great care since Integers are
     /// immutable.
-    fileprivate static func inplaceDivRem1 (_ pout: inout ContiguousArray<Digit>, pin: ContiguousArray<Digit>, psize: Int, n: Digit) -> Digit {
+    fileprivate static func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         var rem: TwoDigits = 0
         for size in (0..<psize).reversed() {
@@ -742,7 +742,93 @@ public struct Integer : Codable {
         Integer.normalize(&w)
         return w
     }
-
+    
+    /// Returns the integral square root of *self*.
+    public func sqrt() -> Integer {
+        guard !self.isNegative || self.isZero else { return Integer.zero }
+        var t1, t2: Integer
+        
+        /* First approx */
+        let sqrtx = self.double.squareRoot()
+        t1 = Integer(sqrtx)
+        
+        /* t1 > 0  */
+        t2 = self / t1
+        t1 = t2 + t1
+        t1 = t1 / 2
+//        mp_div(arg, &t1, &t2, NULL)
+//        mp_add(&t1, &t2, &t1)
+//        mp_div_2(&t1, &t1)
+        
+        /* And now t1 > sqrt(arg) */
+        repeat {
+            t2 = self / t1
+            t1 = t1 + t2
+            t1 = t1 / 2
+//            mp_div(arg, &t1, &t2, NULL)
+//            mp_add(&t1, &t2, &t1)
+//            mp_div_2(&t1, &t1)
+            /* t1 >= sqrt(arg) >= t2 at this point */
+        } while t1 > t2
+        return t1
+    }
+    
+    /// Returns *true* iff *self* is a prime number.
+    public var isPrime : Bool {
+        // naive algorithm which can take forever on large numbers
+        let n = self
+        guard n>3 else { return n>1 }
+        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
+        let maxCheck = Integer.mask                          // check numbers up to maximum using naive algorithm
+        let squareRootN = self.sqrt()
+        if squareRootN.sqr() == n { return false }           // divisible by itself
+        let limit = squareRootN > maxCheck ? Integer(maxCheck) : squareRootN
+        print("Testing naive method with limit of \(limit)")
+        var i = 5
+        while i < limit.integer {
+            var mod:Digit = 0
+            let _ = Integer.divRem(n, n: Digit(i), rem: &mod)
+            if mod == 0 { return false }
+            let _ = Integer.divRem(n, n: Digit(i+2), rem: &mod)
+            if mod == 0 { return false }
+            i += 6
+        }
+        if i > limit && limit == squareRootN { return true }
+        print("Testing Miller-Rabin")
+        return Integer.primeMillerRabin(self, 10)
+    }
+    
+    /// Returns *x* as 2^e \* d where *e* is odd.
+    private static func nlog2(_ x:Integer) -> (d:Integer,e:Int) {
+        var r = 0
+        var d = x
+        let trailingZeros = x.trailingZeroBitCount
+        r+=trailingZeros; d=d.rShift(trailingZeros)
+        if r.isMultiple(of: 2) { r-=1; d=d.lShift(1) }
+        return (d, r)
+    }
+    
+    /// Uses the Miller-Rabin test for a prime number where *n* is the number to be tested
+    /// and *iterations* are the number of test iterations. The more test iterations the
+    /// better the chance that *n* is prime.
+    public static func primeMillerRabin(_ n:Integer, _ iterations:Int) -> Bool {
+        guard n>3 else { return n>1 }
+        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
+        let n1 = n - 1
+        let (d, r) = Integer.nlog2(n1)
+    Loop:
+        for _ in 1...iterations {
+            let a = Integer.random(2...n-2)
+            var x = a ** d % n
+            if x == 1 || x == n1 { continue Loop }
+            for _ in 1..<r {
+                x = x.sqr() % n
+                if x == n1 { continue Loop }
+            }
+            return false  // probably not prime
+        }
+        return true  // probably prime
+    }
     
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
@@ -784,21 +870,63 @@ public struct Integer : Codable {
         return facts
     }()
     
+    ///  log(10) / log(2)
+    static let log10overLog2 = 3.321928095
+    
     /// Returns the number of Digits needed to hold *decimalDigits*.
     static func toDigits(decimalDigits:Int) -> Int {
-        let log10overLog2 = 3.321928095                               // log(10) / log(2)
-        let ndigits = log10overLog2 / Double(shift)                   // number of Digits per base 10 digit
-        return Swift.max(1,Int(round(Double(decimalDigits)*ndigits))) // n size = digits*log(10)/log(2)
+        let ndigits = log10overLog2 / Double(shift)                       // number of Digits per base 10 digit
+        return Swift.max(1,Int(round(Double(decimalDigits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
+    }
+    
+    /// Returns the number of Digits needed to hold *decimalDigits*.
+    static func toDigits(decimalDigits:Integer) -> Int {
+        let ndigits = log10overLog2 / Double(shift)                       // number of Digits per base 10 digit
+        return Swift.max(1,Int(round(Double(decimalDigits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
+    }
+    
+    static func toDecimalDigits(digits:Int) -> Int {
+        let ndigits = Double(shift) / log10overLog2     // number of base 10 digits per Digit
+        return Swift.max(1,Int(round(Double(digits)*ndigits+0.5))) // n size = digits*log(2)/log(10)
+    }
+    
+    /// Returns a random number within the specified *range*.
+    public static func random (_ range:ClosedRange<Integer>) -> Integer {
+        let digits = range.upperBound.digit.count
+        let size = Int.random(in: 1...digits)  // pick a random size
+        let number = Integer.random(digits:toDecimalDigits(digits:size)) % (range.upperBound+1)
+        if number < range.lowerBound { return number+range.lowerBound }
+        return number
+    }
+    
+    // Returns a random number exactly *bits* in length.
+    public static func random (bits: Int) -> Integer {
+        let B = Int(mask)
+        let BPD = Int(shift)       // bits per Digit
+        let digits = bits / BPD    // number of Digits in result
+        
+        // create the random Digits
+        var n = Integer(size: digits+1)
+        for i in 0...digits { n.digit[i] = Digit(Int.random(in: 0..<B)) }
+        
+        // drop any unneeded bits
+        let actual = n.bitWidth
+        return n >> (actual - bits)
     }
     
     /// Returns a decimal *digits*-length random number.
-    /// Note: Actual number of digits ≥ *digits*.
-    /// Default length for digits ≦ 0 is ≅ 50.
-    public static func random (_ digits: Int = defaultDigits) -> Integer {
+    /// Default length for digits is 50.
+    public static func random (digits: Int = defaultDigits) -> Integer {
         let B = mask
         let udigits = digits <= 0 ? defaultDigits : digits
         var n = Integer(size: toDigits(decimalDigits: udigits))
+
+        // create the random Digits
         for i in 0..<n.digit.count { n.digit[i] = Digit(Int.random(in: 0..<Int(B))) }
+        
+        // adjust the size to decimal digit places
+        let aDigits = toDecimalDigits(digits: n.digit.count)
+        if aDigits > udigits { n /= 10 ** (aDigits - udigits) }
         return n
     }
     

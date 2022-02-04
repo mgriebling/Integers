@@ -104,18 +104,30 @@
             for i in Integer(1)...Integer(4) { print(i) }
             
             let x = Integer("1234567890000000000")
-            check("\(x).sqr() = ", x.sqr(), (x*x).description)
+            let x² = Integer("1524157875019052100000000000000000000")
+            check("sqrt(\(x²)) =", x².sqrt(), x.description)
+            check("\(x).sqr() =", x.sqr(), x².description)
+            
+            print("Finding a prime number:")
+            var prime = false
+            repeat {
+                let a = Integer.random(bits:32) | 1
+                print("Integer.random(bits:32) =", a)
+                prime = a.isPrime
+                print("\(a) is\(prime ? "" : " not") prime")
+            } while !prime
+
         }
         
-        func testPerformanceFromString() {
-            var x = Integer()
-            let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
-            self.measure {
-                // Put the code you want to measure the time of here.
-                for _ in 1...100 { x = Integer(s) }
-            }
-            print(x)
-        }
+//        func testPerformanceFromString() {
+//            var x = Integer()
+//            let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
+//            self.measure {
+//                // Put the code you want to measure the time of here.
+//                for _ in 1...100 { x = Integer(s) }
+//            }
+//            print(x)
+//        }
         
 //        func testSquaring1() {
 //            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
@@ -135,14 +147,14 @@
 //            print(y)
 //        }
         
-        func testPerformanceFactorial() {
-            // This is an example of a performance test case.
-            let x = Integer(999)
-            self.measure {
-                // Put the code you want to measure the time of here.
-                _ = x.factorial()
-            }
-        }
+//        func testPerformanceFactorial() {
+//            // This is an example of a performance test case.
+//            let x = Integer(999)
+//            self.measure {
+//                // Put the code you want to measure the time of here.
+//                _ = x.factorial()
+//            }
+//        }
         
     }
 
