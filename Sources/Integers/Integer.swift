@@ -773,29 +773,141 @@ public struct Integer : Codable {
         return t1
     }
     
-    /// Returns *true* iff *self* is a prime number.
-    public var isPrime : Bool {
-        // naive algorithm which can take forever on large numbers
-        let n = self
-        guard n>3 else { return n>1 }
-        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
-        let maxCheck = Integer.mask                          // check numbers up to maximum using naive algorithm
-        let squareRootN = self.sqrt()
-        if squareRootN.sqr() == n { return false }           // divisible by itself
-        let limit = squareRootN > maxCheck ? Integer(maxCheck) : squareRootN
-        print("Testing naive method with limit of \(limit)")
-        var i = 5
-        while i < limit.integer {
-            var mod:Digit = 0
-            let _ = Integer.divRem(n, n: Digit(i), rem: &mod)
-            if mod == 0 { return false }
-            let _ = Integer.divRem(n, n: Digit(i+2), rem: &mod)
-            if mod == 0 { return false }
-            i += 6
+    /// First 11 prime numbers
+    static let primes: [Digit] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
+    
+    /// The ith element in this sequence is the smallest composite number that passes the strong probable prime test
+    /// for all of the first (i+1) primes.
+    ///
+    /// This is sequence [A014233](http://oeis.org/A014233) on the [Online Encyclopaedia of Integer Sequences](http://oeis.org).
+    static let pseudoPrimes: [Integer] = [
+        /*  2 */ 2_047,
+        /*  3 */ 1_373_653,
+        /*  5 */ 25_326_001,
+        /*  7 */ 3_215_031_751,
+        /* 11 */ 2_152_302_898_747,
+        /* 13 */ 3_474_749_660_383,
+        /* 17 */ 341_550_071_728_321,
+        /* 19 */ 341_550_071_728_321,
+        /* 23 */ 3_825_123_056_546_413_051,
+        /* 29 */ 3_825_123_056_546_413_051,
+        /* 31 */ 3_825_123_056_546_413_051,
+        /* 37 */ "318665857834031151167461",
+        /* 41 */ "3317044064679887385961981"
+    ]
+    
+    /// Returns the remainder of this integer raised to the power `exponent` in modulo arithmetic under `modulus`.
+    ///
+    /// Uses the [right-to-left binary method][rtlb].
+    ///
+    /// [rtlb]: https://en.wikipedia.org/wiki/Modular_exponentiation#Right-to-left_binary_method
+    ///
+    /// - Complexity: O(exponent.count * modulus.count^log2(3)) or somesuch
+    func power(_ exponent: Integer, modulus: Integer) -> Integer {
+        precondition(!modulus.isZero)
+        if modulus.magnitude == 1 { return 0 }
+        if exponent.isZero { return 1 }
+        if exponent == 1 { return self.mod(modulus) }
+        if exponent < 0 {
+            precondition(!self.isZero)
+            guard magnitude == 1 else { return 0 }
+            guard self.isNegative else { return 1 }
+            guard exponent & 1 != 0 else { return 1 }
+            return Integer(modulus.magnitude - 1)
         }
-        if i > limit && limit == squareRootN { return true }
-        print("Testing Miller-Rabin")
-        return Integer.primeMillerRabin(self, 10)
+        let power = self.magnitude.power(exponent.magnitude, modulus: modulus.magnitude)
+        if !self.isNegative || exponent.magnitude & 1 == 0 || power.isZero {
+            return Integer(power)
+        }
+        return Integer(modulus.magnitude - power)
+    }
+    
+    /// Returns true iff this integer passes the [strong probable prime test][sppt] for the specified base.
+    ///
+    /// [sppt]: https://en.wikipedia.org/wiki/Probable_prime
+    func isStrongProbablePrime(_ base: Integer) -> Bool {
+        precondition(base > 1)
+        precondition(self > 1)
+        let dec = self - 1
+
+        let r = dec.trailingZeroBitCount
+        let d = dec >> r
+
+        var test = base.power(d, modulus: self)              // var x = a ** d % n
+        if test == 1 || test == dec { return true }
+
+        if r > 0 {
+//            let shift = self.leadingZeroBitCount
+//            let normalized = self << shift
+            for _ in 1 ..< r {
+                test *= test
+                test /= self
+                if test == 1 {
+                    return false
+                }
+                if test == dec { return true }
+            }
+        }
+        return false
+    }
+    
+    /// Returns *true* iff *self* is a prime number. Swift algorithm from BigInt by Károly Lőrentey
+    func isPrime(rounds: Int = 10) -> Bool {
+        if self < 2 { return false }
+        if self < 4 { return true }
+
+        // Even numbers above 2 aren't prime.
+        if self & 1 == 0 { return false }
+
+        // Quickly check small primes.
+        for p in Integer.primes {
+            if self == p { return true }
+            var rem:Digit = 0
+            let _ = Integer.divRem(self, n: p, rem: &rem)
+            if rem == 0 { return false }
+        }
+
+        /// Give an exact answer when we can.
+        if self < Integer.pseudoPrimes.last! {
+            for pseudo in Integer.pseudoPrimes {
+                guard isStrongProbablePrime(pseudo) else { break }
+                if self < pseudo {
+                    // `self` is below the lowest pseudoprime corresponding to the prime bases we tested. It's a prime!
+                    return true
+                }
+            }
+            return false
+        }
+
+        /// Otherwise do as many rounds of random SPPT as required.
+        for _ in 0 ..< rounds {
+            let random = Integer.random(2...self-2)
+            guard isStrongProbablePrime(random) else { return false }
+        }
+
+        // Well, it smells primey to me.
+        return true
+        // naive algorithm which can take forever on large numbers
+//        let n = self
+//        guard n>3 else { return n>1 }
+//        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
+//        let maxCheck = Integer.mask                          // check numbers up to maximum using naive algorithm
+//        let squareRootN = self.sqrt()
+//        if squareRootN.sqr() == n { return false }           // divisible by itself
+//        let limit = squareRootN > maxCheck ? Integer(maxCheck) : squareRootN
+//        print("Testing naive method with limit of \(limit)")
+//        var i = 5
+//        while i < limit.integer {
+//            var mod:Digit = 0
+//            let _ = Integer.divRem(n, n: Digit(i), rem: &mod)
+//            if mod == 0 { return false }
+//            let _ = Integer.divRem(n, n: Digit(i+2), rem: &mod)
+//            if mod == 0 { return false }
+//            i += 6
+//        }
+//        if i > limit && limit == squareRootN { return true }
+//        print("Testing Miller-Rabin")
+//        return Integer.primeMillerRabin(self, 10)
     }
     
     /// Returns *x* as 2^e \* d where *e* is odd.
@@ -1101,8 +1213,9 @@ extension Integer : BinaryInteger {
     public static var isSigned: Bool { true }
     public typealias Words = [UInt]
     
-    public var bitWidth: Int { digit.count*Int(Integer.shift) }
+    public var bitWidth: Int { (digit.count-1)*Int(Integer.shift) + (digit.last?.bitWidth ?? 0) }
     public var trailingZeroBitCount: Int { digit.reduce(0) { $0 + Swift.min($1.trailingZeroBitCount,Int(Integer.shift)) } }
+    public var leadingZeroBitCount: Int { digit.last?.leadingZeroBitCount ?? 0 }
     public var nonzeroBitCount: Int { digit.reduce(0) { $0 + $1.nonzeroBitCount } }
     public var isPowerOfTwo: Bool { self.nonzeroBitCount == 1 }
     
