@@ -546,21 +546,20 @@ public struct Integer : Codable {
         if inputBase & (inputBase-1) == 0 {
             // handle power-of-two radices
             let bitsPerDigit = inputBase.trailingZeroBitCount
-            let n = (bitsPerDigit * s.count + Int(shift) - 1) / Int(shift)  // how many words we need
+            let n = (bitsPerDigit * s.count + Int(shift) - 1) / Int(shift)  // approximately how many words we need
             z = Integer(size: n)
             var accum = TwoDigits(0)
             var bitsInAccum = 0
             var i = 0
             while !s.isEmpty {
-                let c = String(s.removeFirst())
+                let c = String(s.removeLast())
                 if let k = Int(c, radix: inputBase) {
-                    accum <<= bitsPerDigit
-                    accum |= TwoDigits(k)
+                    accum |= TwoDigits(k) << bitsInAccum
                     bitsInAccum += bitsPerDigit
                     if bitsInAccum >= shift {
-                        z.digit[i] = Digit(accum & TwoDigits(mask)); i+=1
+                        z.digit[i] = Digit(accum & TwoDigits(mask)); i+=1    // just store the required *shift* bits
                         assert(i <= n, "Not enough digits in z")
-                        accum >>= shift
+                        accum = accum >> shift
                         bitsInAccum -= Int(shift)
                         assert(bitsInAccum < shift, "Too many bits")
                     }
