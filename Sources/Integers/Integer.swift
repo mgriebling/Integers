@@ -600,7 +600,7 @@ public struct Integer : Codable {
     }
     
     /// Mapping of integer to base digits so that baseDigits[10] -> "A"
-    static private let baseDigits: [Character] = Array("0123456789") + Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    static private let baseDigits: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     
     /// Bitwise signed 1's complement.  The result equals -(a+1).
     public func invert() -> Integer {
@@ -743,7 +743,7 @@ public struct Integer : Codable {
         return w
     }
     
-    /// Returns the integral square root of *self*.
+    /// Returns the integral square root of *self* using Newton's algorithm.
     public func sqrt() -> Integer {
         guard !self.isNegative || self.isZero else { return Integer.zero }
         var t1, t2: Integer
@@ -755,20 +755,13 @@ public struct Integer : Codable {
         /* t1 > 0  */
         t2 = self / t1
         t1 = t2 + t1
-        t1 = t1 / 2
-//        mp_div(arg, &t1, &t2, NULL)
-//        mp_add(&t1, &t2, &t1)
-//        mp_div_2(&t1, &t1)
+        t1 = t1 >> 1
         
         /* And now t1 > sqrt(arg) */
         repeat {
             t2 = self / t1
             t1 = t1 + t2
-            t1 = t1 / 2
-//            mp_div(arg, &t1, &t2, NULL)
-//            mp_add(&t1, &t2, &t1)
-//            mp_div_2(&t1, &t1)
-            /* t1 >= sqrt(arg) >= t2 at this point */
+            t1 = t1 >> 1
         } while t1 > t2
         return t1
     }
@@ -1022,7 +1015,7 @@ public struct Integer : Codable {
         for i in 0...digits { n.digit[i] = Digit(Int.random(in: 0..<B)) }
         
         // drop any unneeded bits
-        let actual = n.bitWidth
+        let actual = n.bitWidth - n.leadingZeroBitCount
         return n >> (actual - bits)
     }
     
@@ -1213,7 +1206,7 @@ extension Integer : BinaryInteger {
     public static var isSigned: Bool { true }
     public typealias Words = [UInt]
     
-    public var bitWidth: Int { (digit.count-1)*Int(Integer.shift) + (digit.last?.bitWidth ?? 0) }
+    public var bitWidth: Int { digit.count*Int(Integer.shift) }
     public var trailingZeroBitCount: Int { digit.reduce(0) { $0 + Swift.min($1.trailingZeroBitCount,Int(Integer.shift)) } }
     public var leadingZeroBitCount: Int { digit.last?.leadingZeroBitCount ?? 0 }
     public var nonzeroBitCount: Int { digit.reduce(0) { $0 + $1.nonzeroBitCount } }
