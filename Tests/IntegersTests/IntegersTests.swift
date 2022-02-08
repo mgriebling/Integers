@@ -109,17 +109,17 @@
 //            check("\(x).sqr() =", x.sqr(), x².description)
 //            let b = Integer("0000000000000000000000000000000000000000000000012340000")
 //            print(b)
-            let a = Integer("0x00000000000000000000000000000000000000000000000a4cc799563c380000")
-            print(a.description(16))
+//            let a = Integer("0x00000000000000000000000000000000000000000000000a4cc799563c380000")
+//            print(a.description(16))
             
-//            print("Finding a prime number:")
-//            var prime = false
-//            repeat {
-//                let a = Integer.random(bits:32) | 1
-//                print("Integer.random(bits:32) =", a)
-//                prime = a.isPrime
-//                print("\(a) is\(prime ? "" : " not") prime")
-//            } while !prime
+            print("Finding a prime number:")
+            var prime = false
+            repeat {
+                let a = Integer.random(bits:32) | 1
+                print("Integer.random(bits:32) = \(a)")
+                prime = a.isPrime()
+                print("\(a) is\(prime ? "" : " not") prime")
+            } while !prime
 
         }
         

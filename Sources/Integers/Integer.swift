@@ -765,120 +765,99 @@ public struct Integer : Codable {
         return t1
     }
     
-    /// First 11 prime numbers
-    static let primes: [Digit] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
-    
-    /// The ith element in this sequence is the smallest composite number that passes the strong probable prime test
-    /// for all of the first (i+1) primes.
-    ///
-    /// This is sequence [A014233](http://oeis.org/A014233) on the [Online Encyclopaedia of Integer Sequences](http://oeis.org).
-    static let pseudoPrimes: [Integer] = [
-        /*  2 */ 2_047,
-        /*  3 */ 1_373_653,
-        /*  5 */ 25_326_001,
-        /*  7 */ 3_215_031_751,
-        /* 11 */ 2_152_302_898_747,
-        /* 13 */ 3_474_749_660_383,
-        /* 17 */ 341_550_071_728_321,
-        /* 19 */ 341_550_071_728_321,
-        /* 23 */ 3_825_123_056_546_413_051,
-        /* 29 */ 3_825_123_056_546_413_051,
-        /* 31 */ 3_825_123_056_546_413_051,
-        /* 37 */ "318665857834031151167461",
-        /* 41 */ "3317044064679887385961981"
+    /// Small primes under 2000 -- sequence A00040 in the OEIS
+    static let smallPrimes = [
+           2,   3,    5,    7,   11,    13,   17,   19,   23,   29,   31,   37,   41,   43,   47,   53,   59,   61,   67,   71,
+          73,  79,   83,   89,   97,   101,  103,  107,  109,  113,  127,  131,  137,  139,  149,  151,  157,  163,  167,  173,
+         179,  181,  191,  193,  197,  199,  211,  223,  227,  229,  233,  239,  241,  251,  257,  263,  269,  271,  277,  281,
+         283,  293,  307,  311,  313,  317,  331,  337,  347,  349,  353,  359,  367,  373,  379,  383,  389,  397,  401,  409,
+         419,  421,  431,  433,  439,  443,  449,  457,  461,  463,  467,  479,  487,  491,  499,  503,  509,  521,  523,  541,
+         547,  557,  563,  569,  571,  577,  587,  593,  599,  601,  607,  613,  617,  619,  631,  641,  643,  647,  653,  659,
+         661,  673,  677,  683,  691,  701,  709,  719,  727,  733,  739,  743,  751,  757,  761,  769,  773,  787,  797,  809,
+         811,  821,  823,  827,  829,  839,  853,  857,  859,  863,  877,  881,  883,  887,  907,  911,  919,  929,  937,  941,
+         947,  953,  967,  971,  977,  983,  991,  997, 1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069,
+        1087, 1091, 1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223,
+        1229, 1231, 1237, 1249, 1259, 1277, 1279, 1283, 1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321, 1327, 1361, 1367, 1373,
+        1381, 1399, 1409, 1423, 1427, 1429, 1433, 1439, 1447, 1451, 1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511,
+        1523, 1531, 1543, 1549, 1553, 1559, 1567, 1571, 1579, 1583, 1597, 1601, 1607, 1609, 1613, 1619, 1621, 1627, 1637, 1657,
+        1663, 1667, 1669, 1693, 1697, 1699, 1709, 1721, 1723, 1733, 1741, 1747, 1753, 1759, 1777, 1783, 1787, 1789, 1801, 1811,
+        1823, 1831, 1847, 1861, 1867, 1871, 1873, 1877, 1879, 1889, 1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987,
+        1993, 1997, 1999
     ]
     
     /// Returns the remainder of this integer raised to the power `exponent` in modulo arithmetic under `modulus`.
-    ///
-    /// Uses the [right-to-left binary method][rtlb].
-    ///
-    /// [rtlb]: https://en.wikipedia.org/wiki/Modular_exponentiation#Right-to-left_binary_method
-    ///
-    /// - Complexity: O(exponent.count * modulus.count^log2(3)) or somesuch
+    /// FIXME: Need to get original algorithm working
     func power(_ exponent: Integer, modulus: Integer) -> Integer {
-        precondition(!modulus.isZero)
-        if modulus.magnitude == 1 { return 0 }
-        if exponent.isZero { return 1 }
-        if exponent == 1 { return self.mod(modulus) }
-        if exponent < 0 {
-            precondition(!self.isZero)
-            guard magnitude == 1 else { return 0 }
-            guard self.isNegative else { return 1 }
-            guard exponent & 1 != 0 else { return 1 }
-            return Integer(modulus.magnitude - 1)
-        }
-        let power = self.magnitude.power(exponent.magnitude, modulus: modulus.magnitude)
-        if !self.isNegative || exponent.magnitude & 1 == 0 || power.isZero {
-            return Integer(power)
-        }
-        return Integer(modulus.magnitude - power)
+        guard exponent > 0 else { return exponent < 0 ? 0 : 1 }
+        var res = Integer.one
+        res = res.power(exponent) % modulus
+//        for _ in 1...exponent { res = (res * self) % modulus }
+        return res
     }
     
     /// Returns true iff this integer passes the [strong probable prime test][sppt] for the specified base.
     ///
     /// [sppt]: https://en.wikipedia.org/wiki/Probable_prime
-    func isStrongProbablePrime(_ base: Integer) -> Bool {
-        precondition(base > 1)
-        precondition(self > 1)
-        let dec = self - 1
-
-        let r = dec.trailingZeroBitCount
-        let d = dec >> r
-
-        var test = base.power(d, modulus: self)              // var x = a ** d % n
-        if test == 1 || test == dec { return true }
-
-        if r > 0 {
-//            let shift = self.leadingZeroBitCount
-//            let normalized = self << shift
-            for _ in 1 ..< r {
-                test *= test
-                test /= self
-                if test == 1 {
-                    return false
-                }
-                if test == dec { return true }
-            }
-        }
-        return false
-    }
+//    func isStrongProbablePrime(_ base: Integer) -> Bool {
+//        precondition(base > 1)
+//        precondition(self > 1)
+//        let dec = self - 1
+//
+//        let r = dec.trailingZeroBitCount
+//        let d = dec >> r
+//
+//        var test = base.power(d, modulus: self)              // var x = a ** d % n
+//        if test == 1 || test == dec { return true }
+//
+//        if r > 0 {
+////            let shift = self.leadingZeroBitCount
+////            let normalized = self << shift
+//            for _ in 1 ..< r {
+//                test *= test
+//                test /= self
+//                if test == 1 {
+//                    return false
+//                }
+//                if test == dec { return true }
+//            }
+//        }
+//        return false
+//    }
     
-    /// Returns *true* iff *self* is a prime number. Swift algorithm from BigInt by Károly Lőrentey
-    func isPrime(rounds: Int = 10) -> Bool {
-        if self < 2 { return false }
-        if self < 4 { return true }
+    /// Returns *true* iff *self* is a prime number.
+    func isPrime(iterations: Int = 5) -> Bool {
+        let n = self
+        guard n > 2 else { return n == 2 }      // only 2 is a prime
 
-        // Even numbers above 2 aren't prime.
-        if self & 1 == 0 { return false }
-
-        // Quickly check small primes.
-        for p in Integer.primes {
-            if self == p { return true }
-            var rem:Digit = 0
-            let _ = Integer.divRem(self, n: p, rem: &rem)
-            if rem == 0 { return false }
+        // prefilter the small primes
+        if n <= Integer.smallPrimes.last! {
+            let nint = n.integer
+            if Integer.smallPrimes.contains(nint) { return true }  // n is a prime
         }
-
-        /// Give an exact answer when we can.
-        if self < Integer.pseudoPrimes.last! {
-            for pseudo in Integer.pseudoPrimes {
-                guard isStrongProbablePrime(pseudo) else { break }
-                if self < pseudo {
-                    // `self` is below the lowest pseudoprime corresponding to the prime bases we tested. It's a prime!
-                    return true
-                }
+        
+        // check if evenly divisible by the small primes
+        for prime in Integer.smallPrimes {
+            if n % Integer(prime) == 0 { return false }  // not a prime
+        }
+        
+        let n1 = n-1
+        var d = n1, s = Integer(0), x = Integer(0)
+        
+        // write n-1 as 2**s * d, with D % 2 != 0
+        while d & 1 == 0 { d >>= 1; s += 1 }
+        
+        // perform Miller-Rabin iterations
+        for _ in 1...iterations {
+            x = Integer.random(Integer(2)...n1).power(d, modulus: n)
+            if x == 1 || x == n1 { continue } // next iteration
+            for _ in 1..<s {
+                x = x.sqr() % n
+                if x == 1 { return false } // not a prime
+                if x == n1 { break }       // exit for
             }
-            return false
+            if x != n1 { return false }
         }
-
-        /// Otherwise do as many rounds of random SPPT as required.
-        for _ in 0 ..< rounds {
-            let random = Integer.random(2...self-2)
-            guard isStrongProbablePrime(random) else { return false }
-        }
-
-        // Well, it smells primey to me.
-        return true
+        return true // probably prime
         // naive algorithm which can take forever on large numbers
 //        let n = self
 //        guard n>3 else { return n>1 }
@@ -902,37 +881,36 @@ public struct Integer : Codable {
 //        return Integer.primeMillerRabin(self, 10)
     }
     
-    /// Returns *x* as 2^e \* d where *e* is odd.
-    private static func nlog2(_ x:Integer) -> (d:Integer,e:Int) {
-        var r = 0
-        var d = x
-        let trailingZeros = x.trailingZeroBitCount
-        r+=trailingZeros; d=d.rShift(trailingZeros)
-        if r.isMultiple(of: 2) { r-=1; d=d.lShift(1) }
-        return (d, r)
-    }
+//    /// Returns *x* as 2^e \* d where *e* is odd.
+//    private static func nlog2(_ x:Integer) -> (d:Integer,e:Int) {
+//        var r = 0
+//        var d = x
+//        let trailingZeros = x.trailingZeroBitCount
+//        r+=trailingZeros; d=d.rShift(trailingZeros)
+//        if r.isMultiple(of: 2) { r-=1; d=d.lShift(1) }
+//        return (d, r)
+//    }
     
     /// Uses the Miller-Rabin test for a prime number where *n* is the number to be tested
     /// and *iterations* are the number of test iterations. The more test iterations the
     /// better the chance that *n* is prime.
-    public static func primeMillerRabin(_ n:Integer, _ iterations:Int) -> Bool {
-        guard n>3 else { return n>1 }
-        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
-        let n1 = n - 1
-        let (d, r) = Integer.nlog2(n1)
-    Loop:
-        for _ in 1...iterations {
-            let a = Integer.random(2...n-2)
-            var x = a ** d % n
-            if x == 1 || x == n1 { continue Loop }
-            for _ in 1..<r {
-                x = x.sqr() % n
-                if x == n1 { continue Loop }
-            }
-            return false  // probably not prime
-        }
-        return true  // probably prime
-    }
+//    public static func primeMillerRabin(_ n:Integer, _ iterations:Int) -> Bool {
+//        guard n>3 else { return n>1 }
+//        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
+//        let n1 = n - 1
+//        let (d, r) = Integer.nlog2(n1)
+//        for _ in 1...iterations {
+//            let a = Integer.random(2...n-2)
+//            var x = a ** d % n
+//            if x == 1 || x == n1 { continue Loop }
+//            for _ in 1..<r {
+//                x = x.sqr() % n
+//                if x == n1 { continue Loop }
+//            }
+//            return false  // probably not prime
+//        }
+//        return true  // probably prime
+//    }
     
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
@@ -1179,7 +1157,8 @@ extension Integer : SignedInteger {
             lvalue = x.quotient
             i += 1
         }
-        digit.removeSubrange(i..<maxDigits)  // normalize number
+        digit.removeLast(maxDigits-i) // normalize number
+//        digit.removeSubrange(i..<maxDigits)
     }
     
     private func negate() -> Integer {
