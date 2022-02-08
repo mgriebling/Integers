@@ -825,7 +825,7 @@ public struct Integer : Codable {
 //    }
     
     /// Returns *true* iff *self* is a prime number.
-    func isPrime(iterations: Int = 5) -> Bool {
+    public func isPrime(iterations: Int = 5) -> Bool {
         let n = self
         guard n > 2 else { return n == 2 }      // only 2 is a prime
 
