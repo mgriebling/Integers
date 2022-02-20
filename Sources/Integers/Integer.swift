@@ -947,7 +947,9 @@ public struct Integer : Codable {
         
         // drop any unneeded bits
         let actual = n.bitWidth - n.leadingZeroBitCount
-        return n >> (actual - bits)
+        let delta = actual - bits
+        if delta > 0 { return n >> delta }
+        return n << (-delta) | Integer(Int.random(in: 0...1))
     }
     
     /// Returns a decimal *digits*-length random number.
