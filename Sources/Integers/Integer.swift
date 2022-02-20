@@ -827,17 +827,21 @@ public struct Integer : Codable {
      - throws: Can throw an error of type `MillerRabinError`.
      - Returns: composite if n is composite, otherwise probably prime
     */
-    public func isPrime(accuracy k: UInt = 1) throws -> Bool {
+    public func isPrime(accuracy k: UInt = 1) -> Bool {
         let n = self
-        guard k > 0 else { throw MillerRabinError.primeLowAccuracy }
-        guard n > 0 else { throw MillerRabinError.primeLowerBorder }
-        guard n > 3 else { return true }
+        guard n > 0, k > 0 else { return false }
+        
+        // Quickly check small primes.
+        for p in Integer.smallPrimes {
+            if n == p { return true }
+            var rem:Digit = 0
+            let _ = Integer.divRem(n, n: Digit(p), rem: &rem)
+            if rem == 0 { return false }
+        }
 
-        // return false for all even numbers bigger than 2
-        if n % 2 == 0 { return false }
         let s = (n - 1).trailingZeroBitCount
         let d = (n - 1) >> s
-        guard 2 ** s * d == n - 1 else { throw MillerRabinError.primeLowerBorder }
+        guard (1 << s) * d == n - 1 else { return false }
         
         /// Inspect whether a given witness will reveal the true identity of n.
         func tryComposite(_ a: Integer, d: Integer, n: Integer) -> Bool? {

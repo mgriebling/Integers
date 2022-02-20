@@ -117,7 +117,7 @@
             repeat {
                 let a = Integer.random(bits:64) | 1
                 print("Integer.random(bits:64) = \(a)")
-                prime = try! a.isPrime(accuracy: 4)
+                prime = a.isPrime(accuracy: 4)
                 print("\(a) is\(prime ? "" : " not") prime")
             } while !prime
 
@@ -133,14 +133,14 @@
             print(x)
         }
         
-        func testSquaring1() {
-            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
-            var y = Integer.zero
-            self.measure {
-                for _ in 1...1000 { y = x*x }
-            }
-            print(y)
-        }
+//        func testSquaring1() {
+//            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
+//            var y = Integer.zero
+//            self.measure {
+//                for _ in 1...1000 { y = x*x }
+//            }
+//            print(y)
+//        }
 
         func testSquaring2() {
             let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
