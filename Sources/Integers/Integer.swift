@@ -827,7 +827,7 @@ public struct Integer : Codable {
      - throws: Can throw an error of type `MillerRabinError`.
      - Returns: composite if n is composite, otherwise probably prime
     */
-    func isPrime(accuracy k: UInt = 1) throws -> Bool {
+    public func isPrime(accuracy k: UInt = 1) throws -> Bool {
         let n = self
         guard k > 0 else { throw MillerRabinError.primeLowAccuracy }
         guard n > 0 else { throw MillerRabinError.primeLowerBorder }
