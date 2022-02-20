@@ -785,132 +785,86 @@ public struct Integer : Codable {
         1993, 1997, 1999
     ]
     
-    /// Returns the remainder of this integer raised to the power `exponent` in modulo arithmetic under `modulus`.
-    /// FIXME: Need to get original algorithm working
-    func power(_ exponent: Integer, modulus: Integer) -> Integer {
-        guard exponent > 0 else { return exponent < 0 ? 0 : 1 }
-        var res = Integer.one
-        res = res.power(exponent) % modulus
-//        for _ in 1...exponent { res = (res * self) % modulus }
-        return res
+    enum MillerRabinError: Error {
+        case primeLowAccuracy
+        case primeLowerBorder
+        case uIntOverflow
     }
     
-    /// Returns true iff this integer passes the [strong probable prime test][sppt] for the specified base.
-    ///
-    /// [sppt]: https://en.wikipedia.org/wiki/Probable_prime
-//    func isStrongProbablePrime(_ base: Integer) -> Bool {
-//        precondition(base > 1)
-//        precondition(self > 1)
-//        let dec = self - 1
-//
-//        let r = dec.trailingZeroBitCount
-//        let d = dec >> r
-//
-//        var test = base.power(d, modulus: self)              // var x = a ** d % n
-//        if test == 1 || test == dec { return true }
-//
-//        if r > 0 {
-////            let shift = self.leadingZeroBitCount
-////            let normalized = self << shift
-//            for _ in 1 ..< r {
-//                test *= test
-//                test /= self
-//                if test == 1 {
-//                    return false
-//                }
-//                if test == dec { return true }
-//            }
-//        }
-//        return false
-//    }
-    
-    /// Returns *true* iff *self* is a prime number.
-    public func isPrime(iterations: Int = 5) -> Bool {
-        let n = self
-        guard n > 2 else { return n == 2 }      // only 2 is a prime
+    /** Calculates the modular exponentiation based on `Applied Cryptography by Bruce Schneier.`
+     in `Schneier, Bruce (1996). Applied Cryptography: Protocols, Algorithms,
+     and Source Code in C, Second Edition (2nd ed.). Wiley. ISBN 978-0-471-11709-4.`
 
-        // prefilter the small primes
-        if n <= Integer.smallPrimes.last! {
-            let nint = n.integer
-            if Integer.smallPrimes.contains(nint) { return true }  // n is a prime
-        }
-        
-        // check if evenly divisible by the small primes
-        for prime in Integer.smallPrimes {
-            if n % Integer(prime) == 0 { return false }  // not a prime
-        }
-        
-        let n1 = n-1
-        var d = n1, s = Integer(0), x = Integer(0)
-        
-        // write n-1 as 2**s * d, with D % 2 != 0
-        while d & 1 == 0 { d >>= 1; s += 1 }
-        
-        // perform Miller-Rabin iterations
-        for _ in 1...iterations {
-            x = Integer.random(Integer(2)...n1).power(d, modulus: n)
-            if x == 1 || x == n1 { continue } // next iteration
-            for _ in 1..<s {
-                x = x.sqr() % n
-                if x == 1 { return false } // not a prime
-                if x == n1 { break }       // exit for
+     - Parameter base: The natural base b.
+     - Parameter base: The natural exponent e.
+     - Parameter base: The natural modulus m.
+     - Returns: The modular exponentiation c.
+    */
+    private func calculateModularExponentiation(base: Integer, exponent: Integer, modulus: Integer) -> Integer {
+        guard modulus > 1 else { return 0 }
+
+        var result: Integer = 1
+        var exponentCopy = exponent
+        var baseCopy = base % modulus
+
+        while exponentCopy > 0 {
+            if exponentCopy % 2 == 1 {
+                result = (result * baseCopy) % modulus
             }
-            if x != n1 { return false }
+            exponentCopy = exponentCopy >> 1
+            baseCopy = (baseCopy * baseCopy) % modulus
         }
-        return true // probably prime
-        // naive algorithm which can take forever on large numbers
-//        let n = self
-//        guard n>3 else { return n>1 }
-//        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
-//        let maxCheck = Integer.mask                          // check numbers up to maximum using naive algorithm
-//        let squareRootN = self.sqrt()
-//        if squareRootN.sqr() == n { return false }           // divisible by itself
-//        let limit = squareRootN > maxCheck ? Integer(maxCheck) : squareRootN
-//        print("Testing naive method with limit of \(limit)")
-//        var i = 5
-//        while i < limit.integer {
-//            var mod:Digit = 0
-//            let _ = Integer.divRem(n, n: Digit(i), rem: &mod)
-//            if mod == 0 { return false }
-//            let _ = Integer.divRem(n, n: Digit(i+2), rem: &mod)
-//            if mod == 0 { return false }
-//            i += 6
-//        }
-//        if i > limit && limit == squareRootN { return true }
-//        print("Testing Miller-Rabin")
-//        return Integer.primeMillerRabin(self, 10)
+
+        return result
     }
     
-//    /// Returns *x* as 2^e \* d where *e* is odd.
-//    private static func nlog2(_ x:Integer) -> (d:Integer,e:Int) {
-//        var r = 0
-//        var d = x
-//        let trailingZeros = x.trailingZeroBitCount
-//        r+=trailingZeros; d=d.rShift(trailingZeros)
-//        if r.isMultiple(of: 2) { r-=1; d=d.lShift(1) }
-//        return (d, r)
-//    }
-    
-    /// Uses the Miller-Rabin test for a prime number where *n* is the number to be tested
-    /// and *iterations* are the number of test iterations. The more test iterations the
-    /// better the chance that *n* is prime.
-//    public static func primeMillerRabin(_ n:Integer, _ iterations:Int) -> Bool {
-//        guard n>3 else { return n>1 }
-//        guard n % 2 != 0 && n % 3 != 0 else { return false } // divisible by 2 or 3
-//        let n1 = n - 1
-//        let (d, r) = Integer.nlog2(n1)
-//        for _ in 1...iterations {
-//            let a = Integer.random(2...n-2)
-//            var x = a ** d % n
-//            if x == 1 || x == n1 { continue Loop }
-//            for _ in 1..<r {
-//                x = x.sqr() % n
-//                if x == n1 { continue Loop }
-//            }
-//            return false  // probably not prime
-//        }
-//        return true  // probably prime
-//    }
+    /** The Miller–Rabin test relies on an equality or set of equalities that
+     hold true for prime values, then checks whether or not they hold for
+     a number that we want to test for primality.
+
+     - Parameter n: an odd integer to be tested for primality;
+     - Parameter k: a parameter that determines the accuracy of the test
+     - throws: Can throw an error of type `MillerRabinError`.
+     - Returns: composite if n is composite, otherwise probably prime
+    */
+    func isPrime(accuracy k: UInt = 1) throws -> Bool {
+        let n = self
+        guard k > 0 else { throw MillerRabinError.primeLowAccuracy }
+        guard n > 0 else { throw MillerRabinError.primeLowerBorder }
+        guard n > 3 else { return true }
+
+        // return false for all even numbers bigger than 2
+        if n % 2 == 0 { return false }
+        let s = (n - 1).trailingZeroBitCount
+        let d = (n - 1) >> s
+        guard 2 ** s * d == n - 1 else { throw MillerRabinError.primeLowerBorder }
+        
+        /// Inspect whether a given witness will reveal the true identity of n.
+        func tryComposite(_ a: Integer, d: Integer, n: Integer) -> Bool? {
+            var x = calculateModularExponentiation(base: a, exponent: d, modulus: n)
+            if x == 1 || x == (n - 1) {
+                return nil
+            }
+            for _ in 1..<s {
+                x = calculateModularExponentiation(base: x, exponent: 2, modulus: n)
+                if x == 1 {
+                    return false
+                } else if x == (n - 1) {
+                    return nil
+                }
+            }
+            return false
+        }
+
+        for _ in 0..<k {
+            let a = Integer.random(2...n-3)
+            if let composite = tryComposite(a, d: d, n: n) {
+                return composite
+            }
+        }
+
+        return true
+    }
     
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
@@ -1185,7 +1139,20 @@ extension Integer : BinaryInteger {
     public typealias Words = [UInt]
     
     public var bitWidth: Int { digit.count*Int(Integer.shift) }
-    public var trailingZeroBitCount: Int { digit.reduce(0) { $0 + Swift.min($1.trailingZeroBitCount,Int(Integer.shift)) } }
+    public var trailingZeroBitCount: Int {
+        var zeros = 0
+        for dig in digit {
+            if dig == 0 {
+                // add full word bits
+                zeros += Int(Integer.shift)
+            } else {
+                // add partial bits
+                zeros += dig.trailingZeroBitCount
+                break
+            }
+        }
+        return zeros
+    }
     public var leadingZeroBitCount: Int { digit.last?.leadingZeroBitCount ?? 0 }
     public var nonzeroBitCount: Int { digit.reduce(0) { $0 + $1.nonzeroBitCount } }
     public var isPowerOfTwo: Bool { self.nonzeroBitCount == 1 }
