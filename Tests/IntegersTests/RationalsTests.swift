@@ -50,6 +50,14 @@ final class RationalsTests: XCTestCase {
 			XCTAssert(pass, "\(a)\(n.description) -> FAIL!")
 		}
 		
+		let a = Rational("1/6"); let b = Rational("2/3")
+		print("a = \(a); b = \(b)")
+		print("a+b =", a+b); assert(a+b == Rational("5/6"), "Failed a+b")
+		print("a-b =", a-b); assert(a-b == Rational("-1/2"), "Failed a-b")
+		print("a*b =", a*b); assert(a*b == Rational("1/9"), "Failed a*b")
+		print("a/b =", a/b); assert(a/b == Rational("1/4"), "Failed a/b")
+		print("b**10 =", b**10); assert(b**10 == Rational("1024/59049"), "Failed b**10")
+		
 		check("Zero = ", Rational.zero, "0")
 		let ns = "123456789012345678900000000000000000001"
 		let ms = "55554444333322221111"
