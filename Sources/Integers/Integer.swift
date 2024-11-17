@@ -29,12 +29,12 @@ import Foundation
 public struct Integer : Codable, Sendable {
     
     /// Basic data type representing one *Digit* of the *Integer*.
-    public typealias Digit = Int32
-    fileprivate typealias TwoDigits = Int64
-	typealias Digits = [Digit]
+	public typealias Digit = Int32
+    private typealias TwoDigits = Int64
+	public typealias Digits = [Digit]
     
     /// Number of bits in a *Digit*.  Minimum is 6.
-    static public let shift : Digit = 30
+    static let shift : Digit = 30
     
     /// Modulo base of a *Digit* = 2^shift
     fileprivate static let base : Digit = 1 << shift
@@ -42,15 +42,15 @@ public struct Integer : Codable, Sendable {
     
     static public let defaultDigits = 50
     
-    static let factInterval = 50    // Factorial table interval
-    static let factEnd = 1000       // End of factorial table
+	private static let factInterval = 50    // Factorial table interval
+	private static let factEnd = 1000       // End of factorial table
     
     /** For exponentiation, use the binary left-to-right algorithm
         unless the exponent contains more than FIVEARY_CUTOFF digits.
         In that case, do 5 bits at a time.  The potential drawback is that
         a table of 2**5 intermediate results is computed.
      */
-    static let FIVEARY_CUTOFF = 8
+	private static let FIVEARY_CUTOFF = 8
     
     /// Stores an integer number of arbitrary size.  The absolute value of a
     /// number is equal to `∑2⋅digit[i]^(i⋅shift) for 0 ≤ i < size` where
@@ -58,8 +58,8 @@ public struct Integer : Codable, Sendable {
     /// with *negative = true*, and zero by *size* = 0.  In a
     /// normalized number, *digit[size-1]* (the most significant digit) is never zero.
     /// For all valid *i*, *0 ≤ digit[i] ≤ mask*.  */
-    var digit: Digits
-    var negative: Bool
+    private var digit: Digits
+	private var negative: Bool
     
     static public let one = Self(1)
     
@@ -67,7 +67,7 @@ public struct Integer : Codable, Sendable {
     /// 30 bits or around 9 decimal digits. When non-empty, `digits` supplies
 	/// the value of the Integer where `∑2⋅digit[i]^(i⋅shift) for 0 ≤ i < size`.
 	/// Note: No checks are performed on the validity of the `digits` array.
-	public init (size : Int = 0, digits: [Digit] = [], negative: Bool = false) {
+	public init (size : Int = 0, digits: Digits = [], negative: Bool = false) {
 		if digits.count == 0 {
 			digit = Digits(repeating: 0, count: size)
 		} else {
@@ -97,9 +97,9 @@ public struct Integer : Codable, Sendable {
         else { self.init(s, withBase: 10) }
     }
     
-    func isEqual (_ n: Self) -> Bool { digit == n.digit && negative == n.negative }
+    private func isEqual (_ n: Self) -> Bool { digit == n.digit && negative == n.negative }
     
-    static func normalize(_ a: inout Self) {
+    static private func normalize(_ a: inout Self) {
         let size = a.digit.count
         var i = size
         while i != 0 && a.digit[i-1] == 0 { i -= 1 }
@@ -109,7 +109,7 @@ public struct Integer : Codable, Sendable {
     }
     
     /// Adds the absolute values of two integers.
-    static func addAbs (_ a: Self, b: Self) -> Self {
+    static private func addAbs (_ a: Self, b: Self) -> Self {
         let x, y : Self
         
         // Ensure x > y
@@ -253,7 +253,7 @@ public struct Integer : Codable, Sendable {
     
     /// Grade school multiplication, ignoring the signs.
     /// Returns: The absolute value of the product of *a* and *b*.
-    static func mulAbs (_ a: Self, b: Self) -> Self {
+    static private func mulAbs (_ a: Self, b: Self) -> Self {
         if a == b {
             return a.sqr()  // about twice as fast
         } else {
@@ -314,7 +314,7 @@ public struct Integer : Codable, Sendable {
     /// *pin=pout* on entry, which saves oodles of mallocs/frees in
     /// Integer format, but that should be done with great care since Integers are
     /// immutable.
-	static func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
+	static private func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         var rem: TwoDigits = 0
         for size in (0..<psize).reversed() {
@@ -329,7 +329,7 @@ public struct Integer : Codable, Sendable {
     /// Divide a long integer *a* by a digit *n*, returning both the quotient
     /// (as function result) and the remainder *rem*.
     /// The sign of *a* is ignored; *n* should not be zero.
-    static func divRem (_ a: Self, n: Digit, rem: inout Digit) -> Self {
+    static private func divRem (_ a: Self, n: Digit, rem: inout Digit) -> Self {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         let size = a.digit.count
         var z = Self(size: size)
@@ -339,7 +339,7 @@ public struct Integer : Codable, Sendable {
     }
     
     /// Multiply by a single digit *n* and add a single digit *add*, ignoring the sign.
-    static func mulAdd (_ a: inout Self, n: Digit, add: Digit) {
+    static private func mulAdd (_ a: inout Self, n: Digit, add: Digit) {
         let sizeA = a.digit.count
         var z = Self(size:sizeA+1)
         var carry = TwoDigits(add)
@@ -354,7 +354,7 @@ public struct Integer : Codable, Sendable {
     }
     
     /// Unsigned long division with remainder.
-    static func divRemAbs (_ v1: Self, w1: Self, rem: inout Self) -> Self {
+    static private func divRemAbs (_ v1: Self, w1: Self, rem: inout Self) -> Self {
         let sizeW = w1.digit.count
         let d = Digit(TwoDigits(base) / TwoDigits(w1.digit[sizeW-1]+1))
         var v = v1, w = w1
@@ -1023,7 +1023,7 @@ public struct Integer : Codable, Sendable {
         normalize(&z)
     }
     
-    /// Returns *op()* applied to *self* and *y*.
+    /// Returns *op()* applied to *self* and *y*. **Do not use**.
     public func lop (_ y: Self, op: (Digit, Digit) -> Digit) -> Self {
         let size = Swift.max(digit.count, y.digit.count)
         let a = self.unsigned(size)
