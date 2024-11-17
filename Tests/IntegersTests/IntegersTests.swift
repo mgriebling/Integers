@@ -84,7 +84,8 @@
             let n4 = Integer("123456789012345")
             check("GCD(\(n4), 87654321) = ", n4.gcd(Integer(87654321)), "3")
             print("Random(50) = \(Integer.random())")
-            check("Integer(987654321) = ", Integer(987654321098765432), "987654321098765432")
+            check("Integer(987654321098765432) = ", Integer(987654321098765432), "987654321098765432")
+			check("Integer(987654321098765432).integer = ", Integer(987654321098765432).integer.description, "987654321098765432")
             check("zero setBit 128 = ", Integer.zero.setBit(128), "340282366920938463463374607431768211456")
             check("one clearBit 0 = ", Integer.one.clearBit(0), "0")
             check("zero toggleBit 16 = ", Integer.zero.toggleBit(16), "65536")
@@ -101,7 +102,7 @@
             check("Integer(1.23456789e+18) = ", Integer(1.23456789e+18), "1234567890000000000")
             
             print("Integer sequence in for loop: ")
-            for i in Integer(1)...Integer(4) { print(i) }
+            for i in Integer(1)...4 { print(i) }
             
             let x = Integer("1234567890000000000")
             let x² = Integer("1524157875019052100000000000000000000")
@@ -123,18 +124,30 @@
 
         }
         
+		let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
+		
         func testPerformanceFromString() {
             var x = Integer()
-            let s = "1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001"
             self.measure {
                 // Put the code you want to measure the time of here.
-                for _ in 1...100 { x = Integer(s) }
+                for _ in 1...1000 { x = Integer(s) }
             }
             print(x)
         }
+		
+		func testPerformanceToString() {
+			let x = Integer(69).factorial()
+			var y = ""
+			self.measure {
+				// Put the code you want to measure the time of here.
+				for _ in 1...1000 { y = x.description }
+			}
+			print(y)
+		}
         
+		// Same as x.sqr - `*` is optimized internally
 //        func testSquaring1() {
-//            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
+//            let x = Integer(s)
 //            var y = Integer.zero
 //            self.measure {
 //                for _ in 1...1000 { y = x*x }
@@ -143,13 +156,23 @@
 //        }
 
         func testSquaring2() {
-            let x = Integer("1711224524281413113724683388812728390922705448935203693936480409232572797541406474240000000000000001")
+            let x = Integer(s)
             var y = Integer.zero
             self.measure {
                 for _ in 1...1000 { y = x.sqr() }
             }
             print(y)
         }
+		
+		func testIntegerLiterals() {
+			let n = "1234567890123456789012345678901234567890"
+			let x = Integer(integerLiteral: 1234567890123456789012345678901234567890)
+			let y = Integer(n)
+			XCTAssert(x == y)
+			XCTAssert(Integer(integerLiteral: -100) == -Integer(100))
+			let a : Integer = -1234567890123456789012345678901234567890
+			XCTAssert(a == Integer("-" + n))
+		}
         
         func testPerformanceFactorial() {
             // This is an example of a performance test case.

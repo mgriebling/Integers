@@ -7,30 +7,31 @@ import Foundation
 /// Added algorithms are from Knuth: *The Art Of Computer Programming*,
 /// Vol 2, section 4.3.1.
 ///
-/// Original Oberon-2 source copyright © 2002, 2003, 2015 Michael van Acken
-/// and Michael Griebling
-/// Ported to Swift by Michael Griebling, 18 July 2015.
-/// Swift source copyright © 2015 - 2022 Michael Griebling
-///
-/// This module is free software; you can redistribute it and/or
-/// modify it under the terms of the GNU Lesser General Public License
-/// as published by the Free Software Foundation; either version 2 of
-/// the License, or (at your option) any later version.
-///
-/// This module is distributed in the hope that it will be useful, but
-/// WITHOUT ANY WARRANTY; without even the implied warranty of
-/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-/// Lesser General Public License for more details.
-///
-/// You should have received a copy of the GNU Lesser General Public
-/// License along with Integers. If not, write to the Free Software Foundation,
-/// 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-///
-public struct Integer : Codable {
+// Original Oberon-2 source copyright © 2002, 2003, 2015 Michael van Acken
+// and Michael Griebling
+// Ported to Swift by Michael Griebling, 18 July 2015.
+// Swift source copyright © 2015 - 2022 Michael Griebling
+//
+// This module is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public License
+// as published by the Free Software Foundation; either version 2 of
+// the License, or (at your option) any later version.
+//
+// This module is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public
+// License along with Integers. If not, write to the Free Software Foundation,
+// 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+//
+public struct Integer : Codable, Sendable {
     
     /// Basic data type representing one *Digit* of the *Integer*.
     public typealias Digit = Int32
     fileprivate typealias TwoDigits = Int64
+	typealias Digits = [Digit]
     
     /// Number of bits in a *Digit*.  Minimum is 6.
     static public let shift : Digit = 30
@@ -44,37 +45,41 @@ public struct Integer : Codable {
     static let factInterval = 50    // Factorial table interval
     static let factEnd = 1000       // End of factorial table
     
-    /* For exponentiation, use the binary left-to-right algorithm
-     * unless the exponent contains more than FIVEARY_CUTOFF digits.
-     * In that case, do 5 bits at a time.  The potential drawback is that
-     * a table of 2**5 intermediate results is computed.
+    /** For exponentiation, use the binary left-to-right algorithm
+        unless the exponent contains more than FIVEARY_CUTOFF digits.
+        In that case, do 5 bits at a time.  The potential drawback is that
+        a table of 2**5 intermediate results is computed.
      */
     static let FIVEARY_CUTOFF = 8
     
     /// Stores an integer number of arbitrary size.  The absolute value of a
-    /// number is equal to *∑ digit[i]\*2^(shift\*i)* for 0 ≤ *i* < *size* where
-    /// *size* = `digit.count`.  Negative numbers are represented
+    /// number is equal to `∑2⋅digit[i]^(i⋅shift) for 0 ≤ i < size` where
+    /// `size` = `digit.count`.  Negative numbers are represented
     /// with *negative = true*, and zero by *size* = 0.  In a
     /// normalized number, *digit[size-1]* (the most significant digit) is never zero.
     /// For all valid *i*, *0 ≤ digit[i] ≤ mask*.  */
-    fileprivate var digit: [Digit]
-    fileprivate var negative: Bool
+    var digit: Digits
+    var negative: Bool
     
-    static public let zero = Integer()
-    static public let one = Integer(1)
+    static public let one = Self(1)
     
-    /// Creates an Integer composed of *size* *Digit*s where each *Digit* holds
-    /// 30 bits or around 9 decimal digits.
-    public init (size : Int = 0, negative: Bool = false) {
-        digit = [Digit](repeating: 0, count: size)
+    /// Creates an Integer composed of *size* `Digit`s where each `Digit` holds
+    /// 30 bits or around 9 decimal digits. When non-empty, `digits` supplies
+	/// the value of the Integer where `∑2⋅digit[i]^(i⋅shift) for 0 ≤ i < size`.
+	/// Note: No checks are performed on the validity of the `digits` array.
+	public init (size : Int = 0, digits: [Digit] = [], negative: Bool = false) {
+		if digits.count == 0 {
+			digit = Digits(repeating: 0, count: size)
+		} else {
+			digit = digits
+		}
         self.negative = negative
     }
     
     /// Creates an Integer from a string with user-definable radix from 2 to 36.
     /// Alphabetic characters are used for radices from 11 to 36 as "A" to "Z".
-    public init (_ str: String, withBase: Int) {
-        self.init()
-        self = Integer.fromString(str, inputBase: withBase)
+    public init (_ str: String, withBase base: Int) {
+        self = Self.fromString(str, inputBase: base)
     }
     
     /// Creates an Integer with the value *int*.
@@ -83,7 +88,7 @@ public struct Integer : Codable {
     /// Creates an Integer from a string with base 10 as a default.
     /// Prefixes of "0x", "0b", "0o" allow hexadecimal, binary, and octal inputs, respectively.
     public init (_ str: String) {
-        func hasPrefix (_ s: String) -> Bool { str.hasPrefix("-"+s) || str.hasPrefix(s) }
+        func hasPrefix (_ s: String) -> Bool { str.hasPrefix("-" + s) || str.hasPrefix(s) }
         
         let s = str.trimmingCharacters(in: CharacterSet.whitespaces)
         if      hasPrefix("0x") { self.init(s.replacingOccurrences(of: "0x", with: ""), withBase: 16) }
@@ -92,20 +97,20 @@ public struct Integer : Codable {
         else { self.init(s, withBase: 10) }
     }
     
-    func isEqual (_ n: Integer) -> Bool { digit == n.digit && negative == n.negative }
+    func isEqual (_ n: Self) -> Bool { digit == n.digit && negative == n.negative }
     
-    fileprivate static func normalize(_ a: inout Integer) {
+    static func normalize(_ a: inout Self) {
         let size = a.digit.count
         var i = size
         while i != 0 && a.digit[i-1] == 0 { i -= 1 }
         
         // remove leading zeros
-        if i != size { a.digit.removeSubrange(i..<size) }
+		if i != size { a.digit.removeSubrange(i...) }
     }
     
     /// Adds the absolute values of two integers.
-    fileprivate static func addAbs (_ a: Integer, b: Integer) -> Integer {
-        let x, y : Integer
+    static func addAbs (_ a: Self, b: Self) -> Self {
+        let x, y : Self
         
         // Ensure x > y
         if a.digit.count < b.digit.count {
@@ -115,7 +120,7 @@ public struct Integer : Codable {
         }
         let sizeA = x.digit.count
         let sizeB = y.digit.count
-        var z = Integer(size: sizeA+1)
+        var z = Self(size: sizeA+1)
         var carry : Digit = 0
         for i in 0..<sizeB {
             carry += x.digit[i] + y.digit[i]
@@ -132,21 +137,20 @@ public struct Integer : Codable {
         return z
     }
     
-    public var isZero : Bool     { digit.count == 0 }
-    public var isNegative : Bool { negative }
-    public var sign : Int        { negative ? -1 : isZero ? 0 : 1 }
-    
-    public func abs() -> Integer { negative ? -self : self }
+	public var isZero : Bool     { digit.count == 0 }
+	public var isNegative : Bool { negative }
+	public var abs : Self   	 { negative ? -self : self }
     
     /// Returns a *Int* approximation of *self* where
     /// very small/large values may return *Int.min* or *Int.max*, respectively.
     public var integer : Int {
-        let limit = Int.max / Int(Integer.base)
+        let limit = Int.max / Int(Self.base)
         var count = digit.count-1
         var int = Int(digit.last ?? 0)
         while count > 0 && int < limit {
-            int *= Int(Integer.base)
-            int += Int(digit[count]); count -= 1
+			count -= 1
+            int *= Int(Self.base)
+            int += Int(digit[count])
         }
         if count > 0 { return negative ? Int.min : Int.max }
         return negative ? -Int(int) : Int(int)
@@ -156,8 +160,8 @@ public struct Integer : Codable {
     /// infinity is returned.
     public var double : Double {
         let (x, e) = scaledDouble()
-        if e > Int(Int32.max / Integer.shift) { return Double.infinity }
-        return ldexp(x, Int32(e) * Integer.shift)
+        if e > Int(Int32.max / Self.shift) { return Double.infinity }
+        return ldexp(x, Int32(e) * Self.shift)
     }
     
     /// Returns a mantissa *x* and exponent *e* approximation of *self*,
@@ -169,11 +173,11 @@ public struct Integer : Codable {
         if i == 0 { return (x:0, e:0) }
         i -= 1
         var x = Double(digit[i])
-        let multiplier = Double(Integer.base)
+        let multiplier = Double(Self.base)
         while i > 0 && nBitsNeeded > 0 {
             i -= 1
             x = x * multiplier + Double(digit[i])
-            nBitsNeeded -= Int(Integer.shift)
+            nBitsNeeded -= Int(Self.shift)
         }
 
         /* There are i digits we didn't shift in.  Pretending they're all
@@ -184,7 +188,7 @@ public struct Integer : Codable {
     
     /// Compares *self* to *b* and returns -1, 0, 1 for the cases where
     /// self < b, self = b, and self > b, respectively.
-    public func cmp (_ b: Integer) -> Int {
+    public func cmp (_ b: Self) -> Int {
         let sizea = digit.count
         let sizeb = b.digit.count
         if sizea > sizeb {
@@ -205,7 +209,7 @@ public struct Integer : Codable {
     }
     
     /// Subtract the absolute value of two integers.
-    fileprivate static func subAbs (_ a: Integer, b: Integer) -> Integer {
+    static func subAbs (_ a: Self, b: Self) -> Self {
         var x = a
         var y = b
         var sign = false
@@ -228,7 +232,7 @@ public struct Integer : Codable {
         
         let sizeA = x.digit.count
         let sizeB = y.digit.count
-        var z = Integer(size: sizeA, negative: sign)
+        var z = Self(size: sizeA, negative: sign)
         var borrow: Digit = 0
         for i in 0..<sizeB {
             borrow = x.digit[i]-y.digit[i]-borrow
@@ -249,14 +253,14 @@ public struct Integer : Codable {
     
     /// Grade school multiplication, ignoring the signs.
     /// Returns: The absolute value of the product of *a* and *b*.
-    fileprivate static func mulAbs (_ a: Integer, b: Integer) -> Integer {
+    static func mulAbs (_ a: Self, b: Self) -> Self {
         if a == b {
             return a.sqr()  // about twice as fast
         } else {
             var carry: TwoDigits
             let sizeA = a.digit.count
             let sizeB = b.digit.count
-            var z = Integer(size:sizeA+sizeB)
+            var z = Self(size:sizeA+sizeB)
             
             for i in 0..<sizeA {
                 let f = TwoDigits(a.digit[i])
@@ -282,23 +286,24 @@ public struct Integer : Codable {
     } // MulAbs;
     
     /// Add *self* to *b* and return the sum.
-    /// Note: Subtraction is performed by *self.add(b.negate())*.
-    public func add (_ b: Integer) -> Integer {
+    /// Note: Subtraction is performed by *self.add(b.negate)*.
+    public func add (_ b: Self) -> Self {
         if negative {
             if b.negative {
-                var z = Integer.addAbs(self, b:b)
+                var z = Self.addAbs(self, b:b)
                 z.negative = true
                 return z
             } else {
-                return Integer.subAbs(b, b:self)
+                return Self.subAbs(b, b:self)
             }
         } else {
-            return b.negative ? Integer.subAbs(self, b:b) : Integer.addAbs(self, b:b)
+            return b.negative ? Self.subAbs(self, b:b) : Self.addAbs(self, b:b)
         }
     }
     
-    public func mul (_ b: Integer) -> Integer {
-        var z = Integer.mulAbs(self, b:b)
+	/// Multiply `self` times `b` and return the result.
+    public func mul (_ b: Self) -> Self {
+        var z = Self.mulAbs(self, b:b)
         if negative != b.negative { z.negative = !z.negative }
         return z
     }
@@ -309,7 +314,7 @@ public struct Integer : Codable {
     /// *pin=pout* on entry, which saves oodles of mallocs/frees in
     /// Integer format, but that should be done with great care since Integers are
     /// immutable.
-    fileprivate static func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
+	static func inplaceDivRem1 (_ pout: inout [Digit], pin: [Digit], psize: Int, n: Digit) -> Digit {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         var rem: TwoDigits = 0
         for size in (0..<psize).reversed() {
@@ -324,19 +329,19 @@ public struct Integer : Codable {
     /// Divide a long integer *a* by a digit *n*, returning both the quotient
     /// (as function result) and the remainder *rem*.
     /// The sign of *a* is ignored; *n* should not be zero.
-    fileprivate static func divRem (_ a: Integer, n: Digit, rem: inout Digit) -> Integer {
+    static func divRem (_ a: Self, n: Digit, rem: inout Digit) -> Self {
         assert(n > 0 && n < base, "\(#function): assertion failed")
         let size = a.digit.count
-        var z = Integer(size: size)
+        var z = Self(size: size)
         rem = inplaceDivRem1(&z.digit, pin:a.digit, psize:size, n:n)
         normalize(&z)
         return z
     }
     
     /// Multiply by a single digit *n* and add a single digit *add*, ignoring the sign.
-    fileprivate static func mulAdd (_ a: inout Integer, n: Digit, add: Digit) {
+    static func mulAdd (_ a: inout Self, n: Digit, add: Digit) {
         let sizeA = a.digit.count
-        var z = Integer(size:sizeA+1)
+        var z = Self(size:sizeA+1)
         var carry = TwoDigits(add)
         for i in 0..<sizeA {
             carry += TwoDigits(a.digit[i]) * TwoDigits(n)
@@ -348,8 +353,8 @@ public struct Integer : Codable {
         a = z
     }
     
-    /// Unsigned long division with remainder
-    fileprivate static func divRemAbs (_ v1: Integer, w1: Integer, rem: inout Integer) -> Integer {
+    /// Unsigned long division with remainder.
+    static func divRemAbs (_ v1: Self, w1: Self, rem: inout Self) -> Self {
         let sizeW = w1.digit.count
         let d = Digit(TwoDigits(base) / TwoDigits(w1.digit[sizeW-1]+1))
         var v = v1, w = w1
@@ -360,12 +365,12 @@ public struct Integer : Codable {
         assert(sizeW == w.digit.count, "\(#function): assertion 2 failed")
         
         let sizeV = v.digit.count
-        var a = Integer(size:sizeV-sizeW+1)
+        var a = Self(size:sizeV-sizeW+1)
         var j = sizeV
         for k in (0..<a.digit.count).reversed() {
             let vj: TwoDigits = j >= sizeV ? 0 : TwoDigits(v.digit[j])
-            let base = TwoDigits(Integer.base)
-            let mask = TwoDigits(Integer.mask)
+            let base = TwoDigits(Self.base)
+            let mask = TwoDigits(Self.mask)
             let w1digit = TwoDigits(w.digit[sizeW-1])
             let w2digit = TwoDigits(w.digit[sizeW-2])
             let vdigit = TwoDigits(v.digit[j-1])
@@ -412,9 +417,10 @@ public struct Integer : Codable {
         return a
     } // DivRemAbs;
     
-    public static func divRem (_ a: Integer, b: Integer) -> (div:Integer, mod: Integer) {
+	/// Signed long division with remainder.
+    public static func divRem (_ a: Self, b: Self) -> (div:Self, mod: Self) {
         var remDigit: Digit
-        var rem, z: Integer
+        var rem, z: Self
         
         let sizeA = a.digit.count
         let sizeB = b.digit.count
@@ -427,7 +433,7 @@ public struct Integer : Codable {
             if sizeB == 1 {
                 remDigit = 0
                 z = divRem(a, n:b.digit[0], rem:&remDigit)
-                rem = Integer(Int(remDigit))
+                rem = Self(Int(remDigit))
             } else {
                 rem = zero
                 z = divRemAbs(a, w1:b, rem:&rem)
@@ -441,19 +447,23 @@ public struct Integer : Codable {
         }
     } // DivRem;
     
-    @inlinable func divMod (_ w: Integer) -> (div: Integer, mod: Integer) { Integer.divRem(self, b:w) }
+    @inlinable func divMod (_ w: Self) -> (div: Self, mod: Self) { Self.divRem(self, b:w) }
     
-    @inlinable func div (_ w: Integer) -> Integer {
+	/// Division.
+    @inlinable func div (_ w: Self) -> Self {
         let (div, _) = self.divMod(w)
         return div
     } // Div;
     
-    @inlinable func mod (_ w: Integer) -> Integer {
+	/// Modulo.
+    @inlinable func mod (_ w: Self) -> Self {
         let (_, mod) = self.divMod(w)
         return mod
     } // Mod;
     
-    /** Convert an *Integer* object to a string, using a given conversion base.  */
+    /** Convert an *Integer* object to a string, using a given conversion base
+		where `2 ≤ outputBase ≤ 36`
+	 */
     public func description (_ outputBase: Int) -> String {
         var str = ""
         let sizeA = self.digit.count
@@ -470,12 +480,12 @@ public struct Integer : Codable {
             
             for i in 0..<sizeA {
                 accum |= TwoDigits(digit[i]) << accumBits
-                accumBits += TwoDigits(Integer.shift)
+                accumBits += TwoDigits(Self.shift)
                 assert(accumBits >= baseBits, "\(#function): Failed power of two check")
                 repeat {
                     let d = Int(accum & mask)
                     assert(d >= 0, "\(#function): d < 0")
-                    let c = Integer.baseDigits[d]
+                    let c = Self.baseDigits[d]
                     str = String(c) + str
                     accumBits -= TwoDigits(baseBits)
                     accum = accum >> TwoDigits(baseBits)
@@ -487,7 +497,7 @@ public struct Integer : Codable {
             var power = 1
             while true {
                 let temp = powbase * outputBase
-                if temp > Int(Integer.base) { break }
+                if temp > Int(Self.base) { break }
                 powbase = temp
                 power += 1
             }
@@ -499,7 +509,7 @@ public struct Integer : Codable {
             /* Repeatedly divide by powbase. */
             repeat {
                 var ntostore = power
-                var rem = Integer.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
+                var rem = Self.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
                 if scratch.digit[size-1] == 0 { size -= 1 }
                 
                 /* Break rem into digits. */
@@ -508,7 +518,7 @@ public struct Integer : Codable {
                     let nextrem = rem / Digit(outputBase)
                     let d = rem - nextrem * Digit(outputBase)
                     assert(d >= 0, "(\(#function) d < 0")
-                    let c = Integer.baseDigits[Int(d)]
+                    let c = Self.baseDigits[Int(d)]
                     str = String(c) + str
                     rem = nextrem
                     ntostore -= 1
@@ -522,8 +532,8 @@ public struct Integer : Codable {
         return negative ? "-" + str : str
     }
     
-    /// Converts a string *str* to an Integer using digits from the *inputBase*.
-    static public func fromString (_ str: String, inputBase: Int) -> Integer {
+    /// Converts a string `str` to an Integer using digits from the `inputBase`.
+    static public func fromString (_ str: String, inputBase: Int) -> Self {
         assert(2 <= inputBase && inputBase <= 36, "\(#function): 2 ≤ inputBase ≤ 36")
         
         var negative = false
@@ -542,12 +552,12 @@ public struct Integer : Codable {
         }
         
         let upperCharacter = String(baseDigits[inputBase-1])
-        var z = Integer.zero
+        var z = Self.zero
         if inputBase & (inputBase-1) == 0 {
             // handle power-of-two radices
             let bitsPerDigit = inputBase.trailingZeroBitCount
             let n = (bitsPerDigit * s.count + Int(shift) - 1) / Int(shift)  // approximately how many words we need
-            z = Integer(size: n)
+            z = Self(size: n)
             var accum = TwoDigits(0)
             var bitsInAccum = 0
             var i = 0
@@ -588,7 +598,7 @@ public struct Integer : Codable {
                     si.append(s.removeFirst())
                 }
                 if let d = Int(si, radix: inputBase) {
-                    Integer.mulAdd(&z, n:Digit(divisors[si.count-1]), add:Digit(d))
+                    Self.mulAdd(&z, n:Digit(divisors[si.count-1]), add:Digit(d))
                 } else {
                     assertionFailure("\(#function): string characters \"\(si)\" must be '0' to '\(upperCharacter)'")
                 }
@@ -599,33 +609,34 @@ public struct Integer : Codable {
     }
     
     /// Mapping of integer to base digits so that baseDigits[10] -> "A"
-    static private let baseDigits: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    static private let baseDigits = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     
     /// Bitwise signed 1's complement.  The result equals -(a+1).
-    public func invert() -> Integer {
+    public func invert() -> Self {
         var a = self
-        Integer.mulAdd(&a, n: 1, add: 1)
+        Self.mulAdd(&a, n: 1, add: 1)
         a.negative = !negative
         return a
     }
     
-    public func lShift (_ n: Int) -> Integer {
+	/// Shift `self` left by `n` bits where n ≥ 0.
+    public func lShift (_ n: Int) -> Self {
         assert(n >= 0, "\(#function): Shift is negative")
-        let wordShift = n / Int(Integer.shift)
-        let remShift = TwoDigits(Digit(n) % Integer.shift)
+        let wordShift = n / Int(Self.shift)
+        let remShift = TwoDigits(Digit(n) % Self.shift)
         
         let oldSize = digit.count
         var newSize = oldSize+wordShift
         if remShift != 0 { newSize += 1 }
         
-        var z = Integer(size: newSize)
+        var z = Self(size: newSize)
         z.negative = negative
         var accum: TwoDigits = 0
         var i = wordShift
         for j in 0..<oldSize {
             accum |= TwoDigits(digit[j]) << remShift
-            z.digit[i] = Digit(accum & TwoDigits(Integer.mask))
-            accum >>= TwoDigits(Integer.shift)
+            z.digit[i] = Digit(accum & TwoDigits(Self.mask))
+            accum >>= TwoDigits(Self.shift)
             i += 1
         }
         if remShift != 0 {
@@ -633,26 +644,29 @@ public struct Integer : Codable {
         } else {
             assert(accum == 0, "\(#function): remShift == 0")
         }
-        Integer.normalize(&z)
+        Self.normalize(&z)
         return z
-    } // LShift;
+    }
     
-    public func rShift (_ n: Int) -> Integer {
+	/// Shift `self` right by `n` bits where n ≥ 0. If `self` is negative,
+	/// the sign is extended to fill the most significant bit positions with
+	/// the sign bit.
+    public func rShift (_ n: Int) -> Self {
         assert(n >= 0, "\(#function): Shift is negative")
         if negative {
             let a = self.invert().rShift(n)
             return a.invert()
         } else {
-            let wordShift = n / Int(Integer.shift)
+            let wordShift = n / Int(Self.shift)
             let newSize = digit.count - wordShift
             if newSize <= 0 {
-                return Integer.zero
+                return Self.zero
             } else {
-                let loShift = Digit(n) % Integer.shift
-                let hiShift = Integer.shift - loShift
-                let loMask = Int32(1 << hiShift) - 1
-                let hiMask = Int32(Integer.mask) ^ loMask
-                var z = Integer(size: newSize)
+                let loShift = Digit(n) % Self.shift
+                let hiShift = Self.shift - loShift
+                let loMask = Digit(1 << hiShift) - 1
+                let hiMask = Digit(Self.mask) ^ loMask
+                var z = Self(size: newSize)
                 var j = wordShift
                 for i in 0..<newSize {
                     z.digit[i] = (digit[j] >> loShift) & loMask
@@ -661,21 +675,20 @@ public struct Integer : Codable {
                     }
                     j += 1
                 }
-                Integer.normalize(&z)
+                Self.normalize(&z)
                 return z
             }
         }
     } // RShift;
     
     /// Euclid's gcd algorithm  (very elegant and very ancient!)
-    /// Returns greatest common divisor of *m* and *n* where *m* = *self*
-    /// Precondition: m ≥ n, n > 0
-    public func gcd (_ n: Integer) -> Integer {
-//        assert(!self.isNegative && !n.isNegative, "\(#function): m < 0 or n < 0")
-        var x = self.abs()
-        var y = n.abs()
+    /// Returns the greatest common divisor of `self` and `n`,
+    /// Precondition: self ≥ n, n > 0
+    public func gcd (_ n: Self) -> Self {
+        var x = self.abs
+        var y = n.abs
         
-        /* To start everything must be non-negative and x >= y */
+        /* To start, everything must be non-negative and x >= y */
         if x < y { swap(&x, &y) }  // swap x and y so that x >= y
         
         while !y.isZero {
@@ -687,11 +700,11 @@ public struct Integer : Codable {
     
     /// Returns x^b where x = *self*.
     /// Precondition: b ≥ 0
-    public func power (_ b: Integer) -> Integer {
-        guard b>=0 else { return Integer.zero }  /* x**-exp = 0 */
+    public func power (_ b: Self) -> Self {
+        guard b>=0 else { return Self.zero }  /* x**-exp = 0 */
         var x = self
-        var y = Integer.one
-        if self.digit.count <= Integer.FIVEARY_CUTOFF {
+        var y = Self.one
+        if self.digit.count <= Self.FIVEARY_CUTOFF {
             // use the straight-forward algorithm (HAC Algorithm 14.79)
             var lexp = b
             while lexp > 0 {
@@ -701,13 +714,13 @@ public struct Integer : Codable {
             }
         } else {
             // Left-to-right 5-ary exponentiation (HAC Algorithm 14.82)
-            var table = [Integer](); table.reserveCapacity(32)
+            var table = [Self](); table.reserveCapacity(32)
             table.append(y)
             for i in 1..<32 { table.append(table[i-1] * x) }
         
             for i in stride(from: b.digit.count-1, through: 0, by: -1) {
                 let bi = b.digit[i]
-                for j in stride(from: Integer.shift-5, through: 0, by: -5) {
+                for j in stride(from: Self.shift-5, through: 0, by: -5) {
                     let index = Int((bi >> j)) & 0x1F
                     for _ in 0..<5 { y = y.sqr() }
                     if index != 0 { y = y * table[index] }
@@ -720,36 +733,36 @@ public struct Integer : Codable {
     /// Returns x^2 where x = *self*.
     /// This method requires around half the operations of x \* x.
     /// Using algorithm 14.16 from *Handbook of Applied Cryptography*.
-    public func sqr () -> Integer {
-        typealias Digit2 = Integer.TwoDigits
+    public func sqr () -> Self {
+        typealias Digit2 = Self.TwoDigits
         let digits = self.digit.count
-        let mask = Integer.TwoDigits(Integer.mask)
-        var w = Integer(size:digits*2)
+        let mask = Self.TwoDigits(Self.mask)
+        var w = Self(size:digits*2)
         let x = self.digit
         for i in 0..<digits {
             let xi = Digit2(x[i])
             var uv = Digit2(w.digit[2*i])+xi*xi
-            w.digit[2*i] = Integer.Digit(uv & mask)
-            var c = uv >> Integer.shift
+            w.digit[2*i] = Self.Digit(uv & mask)
+            var c = uv >> Self.shift
             for j in (i+1)..<digits {
                 uv = Digit2(w.digit[i+j]) + 2*Digit2(x[j])*xi + c
-                w.digit[i+j] = Integer.Digit(uv & mask)
-                c = uv >> Integer.shift
+                w.digit[i+j] = Self.Digit(uv & mask)
+                c = uv >> Self.shift
             }
             w.digit[i+digits] = Digit(c)
         }
-        Integer.normalize(&w)
+        Self.normalize(&w)
         return w
     }
     
     /// Returns the integral square root of *self* using Newton's algorithm.
-    public func sqrt() -> Integer {
-        guard !self.isNegative || self.isZero else { return Integer.zero }
-        var t1, t2: Integer
+    public func sqrt() -> Self {
+        guard !self.isNegative || self.isZero else { return Self.zero }
+        var t1, t2: Self
         
         /* First approx */
         let sqrtx = self.double.squareRoot()
-        t1 = Integer(sqrtx)
+        t1 = Self(sqrtx)
         
         /* t1 > 0  */
         t2 = self / t1
@@ -796,19 +809,19 @@ public struct Integer : Codable {
      and Source Code in C, Second Edition (2nd ed.). Wiley. ISBN 978-0-471-11709-4.`
 
      - Parameter base: The natural base b.
-     - Parameter base: The natural exponent e.
-     - Parameter base: The natural modulus m.
+     - Parameter exponent: The natural exponent e.
+     - Parameter modulus: The natural modulus m.
      - Returns: The modular exponentiation c.
     */
-    private func calculateModularExponentiation(base: Integer, exponent: Integer, modulus: Integer) -> Integer {
+    private func calculateModularExponentiation(base: Self, exponent: Self, modulus: Self) -> Self {
         guard modulus > 1 else { return 0 }
 
-        var result: Integer = 1
+        var result: Self = 1
         var exponentCopy = exponent
         var baseCopy = base % modulus
 
         while exponentCopy > 0 {
-            if exponentCopy % 2 == 1 {
+			if !exponentCopy.isMultiple(of: Self(2)) {
                 result = (result * baseCopy) % modulus
             }
             exponentCopy = exponentCopy >> 1
@@ -822,20 +835,20 @@ public struct Integer : Codable {
      hold true for prime values, then checks whether or not they hold for
      a number that we want to test for primality.
 
-     - Parameter n: an odd integer to be tested for primality;
+     - Parameter self: an odd integer to be tested for primality;
      - Parameter k: a parameter that determines the accuracy of the test
      - throws: Can throw an error of type `MillerRabinError`.
-     - Returns: composite if n is composite, otherwise probably prime
+     - Returns: false if n is composite, otherwise true (probably prime)
     */
     public func isPrime(accuracy k: UInt = 1) -> Bool {
         let n = self
         guard n > 0, k > 0 else { return false }
         
         // Quickly check small primes.
-        for p in Integer.smallPrimes {
+        for p in Self.smallPrimes {
             if n == p { return true }
             var rem:Digit = 0
-            let _ = Integer.divRem(n, n: Digit(p), rem: &rem)
+            let _ = Self.divRem(n, n: Digit(p), rem: &rem)
             if rem == 0 { return false }
         }
 
@@ -844,7 +857,7 @@ public struct Integer : Codable {
         guard (1 << s) * d == n - 1 else { return false }
         
         /// Inspect whether a given witness will reveal the true identity of n.
-        func tryComposite(_ a: Integer, d: Integer, n: Integer) -> Bool? {
+        func tryComposite(_ a: Self, d: Self, n: Self) -> Bool? {
             var x = calculateModularExponentiation(base: a, exponent: d, modulus: n)
             if x == 1 || x == (n - 1) {
                 return nil
@@ -861,7 +874,7 @@ public struct Integer : Codable {
         }
 
         for _ in 0..<k {
-            let a = Integer.random(2...n-3)
+            let a = Self.random(2...n-3)
             if let composite = tryComposite(a, d: d, n: n) {
                 return composite
             }
@@ -872,38 +885,38 @@ public struct Integer : Codable {
     
     /// Returns x! = x(x-1)(x-2)...(2)(1) where *x* = *self*.
     /// Precondition: *x* ≥ 0
-    public func factorial () -> Integer {
+    public func factorial () -> Self {
         assert(!self.isNegative, "\(#function): x must be ≥ 0!")
         let x = self.integer
-        if x < 0 { return Integer.zero }  /* out of range */
-        if x < 2 { return Integer.one }   /* 0! & 1! */
+        if x < 0 { return Self.zero }  /* out of range */
+        if x < 2 { return Self.one }   /* 0! & 1! */
         
-        var f = Integer.one
+        var f = Self.one
         var start = Digit(2)
-        let factInt = Integer.factInterval
-        if x > factInt && x <= Integer.factEnd {
+        let factInt = Self.factInterval
+        if x > factInt && x <= Self.factEnd {
             let index = (x - factInt) / factInt
-            f = Integer.factTable[index]
+            f = Self.factTable[index]
             start = Digit(index * factInt + factInt+1)
             if start > x { return f }
         }
 
         for lx in start...Digit(x) {
-            Integer.mulAdd(&f, n: lx, add: 0)  /* f=f*x */
+            Self.mulAdd(&f, n: lx, add: 0)  /* f=f*x */
         }
-        Integer.normalize(&f)
+        Self.normalize(&f)
         return f
     }
     
-    // Table of factorials at every 50 steps to 1000
-    static private var factTable : [Integer] = {
-        var facts = [Integer]()
-        var f = Integer.one
-        for lx in 2...Digit(Integer.factEnd) {
-            Integer.mulAdd(&f, n: lx, add: 0)  /* f=f*x */
-            if lx.isMultiple(of: Digit(Integer.factInterval)) {
+    /// Table of factorials at every 50 steps to 1000
+    static private var factTable : [Self] = {
+        var facts = [Self]()
+        var f = Self.one
+        for lx in 2...Digit(Self.factEnd) {
+            Self.mulAdd(&f, n: lx, add: 0)  /* f=f*x */
+            if lx.isMultiple(of: Digit(Self.factInterval)) {
                 var s = f
-                Integer.normalize(&s)
+                Self.normalize(&s)
                 facts.append(s)
             }
         }
@@ -920,7 +933,7 @@ public struct Integer : Codable {
     }
     
     /// Returns the number of Digits needed to hold *decimalDigits*.
-    static func toDigits(decimalDigits:Integer) -> Int {
+    static func toDigits(decimalDigits:Self) -> Int {
         let ndigits = log10overLog2 / Double(shift)                       // number of Digits per base 10 digit
         return Swift.max(1,Int(round(Double(decimalDigits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
     }
@@ -931,37 +944,37 @@ public struct Integer : Codable {
     }
     
     /// Returns a random number within the specified *range*.
-    public static func random (_ range:ClosedRange<Integer>) -> Integer {
+    public static func random (_ range:ClosedRange<Self>) -> Self {
         let digits = range.upperBound.digit.count
         let size = Int.random(in: 1...digits)  // pick a random size
-        let number = Integer.random(digits:toDecimalDigits(digits:size)) % (range.upperBound+1)
+        let number = Self.random(digits:toDecimalDigits(digits:size)) % (range.upperBound+1)
         if number < range.lowerBound { return number+range.lowerBound }
         return number
     }
     
-    // Returns a random number exactly *bits* in length.
-    public static func random (bits: Int) -> Integer {
+    /// Returns a random number exactly *bits* in length.
+    public static func random (bits: Int) -> Self {
         let B = Int(mask)
         let BPD = Int(shift)       // bits per Digit
         let digits = bits / BPD    // number of Digits in result
         
         // create the random Digits
-        var n = Integer(size: digits+1)
+        var n = Self(size: digits+1)
         for i in 0...digits { n.digit[i] = Digit(Int.random(in: 0..<B)) }
         
         // drop any unneeded bits
         let actual = n.bitWidth - n.leadingZeroBitCount
         let delta = actual - bits
         if delta > 0 { return n >> delta }
-        return n << (-delta) | Integer(Int.random(in: 0...1))
+        return n << (-delta) | Self(Int.random(in: 0...1))
     }
     
     /// Returns a decimal *digits*-length random number.
     /// Default length for digits is 50.
-    public static func random (digits: Int = defaultDigits) -> Integer {
+    public static func random (digits: Int = defaultDigits) -> Self {
         let B = mask
         let udigits = digits <= 0 ? defaultDigits : digits
-        var n = Integer(size: toDigits(decimalDigits: udigits))
+        var n = Self(size: toDigits(decimalDigits: udigits))
 
         // create the random Digits
         for i in 0..<n.digit.count { n.digit[i] = Digit(Int.random(in: 0..<Int(B))) }
@@ -976,27 +989,27 @@ public struct Integer : Codable {
     /*  Logical operations                                     */
     
     /// Returns an extension of self to *size* digits.
-    fileprivate func extendedTo (_ size: Int) -> Integer {
+    func extendedTo (_ size: Int) -> Self {
         if digit.count == size { return self }
-        var y = Integer(size: size)
+        var y = Self(size: size)
         y.negative = negative
         y.digit[0..<digit.count] = digit[0..<digit.count]
         return y
     }
     
     /// Creates a limited *size* unsigned version of *self*.
-    fileprivate func unsigned (_ size: Int) -> Integer {
+    func unsigned (_ size: Int) -> Self {
         if !negative { return self.extendedTo(size) }
-        var a = Integer(size: size)
+        var a = Self(size: size)
         
         /* convert to 1's complement */
         let b = (self+1).extendedTo(size)
-        for i in 0..<size { a.digit[i] = ~b.digit[i] & Integer.mask }
+        for i in 0..<size { a.digit[i] = ~b.digit[i] & Self.mask }
         return a
     }
     
     /// Creates a normalized signed version of *z*.
-    fileprivate static func signed (_ z: inout Integer) {
+    static func signed (_ z: inout Self) {
         let size = z.digit.count
         let signMask = Digit(1 << (shift-1))   // sign bit mask
         if size == 0 { return }
@@ -1004,42 +1017,42 @@ public struct Integer : Codable {
         
         // convert back to two's complement format
         if z.negative {
-            for i in 0..<size { z.digit[i] = ~z.digit[i] & Integer.mask }
+            for i in 0..<size { z.digit[i] = ~z.digit[i] & Self.mask }
             z-=1
         }
         normalize(&z)
     }
     
     /// Returns *op()* applied to *self* and *y*.
-    public func lop (_ y: Integer, op: (Digit, Digit) -> Digit) -> Integer {
+    public func lop (_ y: Self, op: (Digit, Digit) -> Digit) -> Self {
         let size = Swift.max(digit.count, y.digit.count)
         let a = self.unsigned(size)
         let b = y.unsigned(size)
-        var z = Integer(size: size)
+        var z = Self(size: size)
         for i in 0..<size { z.digit[i] = op(a.digit[i], b.digit[i]) }
-        Integer.signed(&z)
+        Self.signed(&z)
         return z
     }
     
     /// Returns bitwise **and** of *self* and *y*
-    @inlinable func and (_ y : Integer) -> Integer { self.lop(y, op: &) }
+    @inlinable func and (_ y : Self) -> Self { self.lop(y, op: &) }
     
     ///Returns bitwise **or** of *self* and *y*.
-    @inlinable func or (_ y : Integer) -> Integer { self.lop(y, op: |) }
+    @inlinable func or (_ y : Self) -> Self { self.lop(y, op: |) }
     
     /// Returns bitwise **xor** of *self* and *y*.
-    @inlinable func xor (_ y : Integer) -> Integer { self.lop(y, op: ^) }
+    @inlinable func xor (_ y : Self) -> Self { self.lop(y, op: ^) }
     
     /// Returns *self* with *bit* set in the receiver.
-    @inlinable func setBit(_ bit: Int) -> Integer { self | (1 << bit) }
+    @inlinable func setBit(_ bit: Int) -> Self { self | (1 << bit) }
     
     /// Returns *self* with *bit* cleared in the receiver.
-    @inlinable func clearBit(_ bit: Int) -> Integer { self & ~(1 << bit) }
+    @inlinable func clearBit(_ bit: Int) -> Self { self & ~(1 << bit) }
     
     /// Returns *self* with *bit* toggled in the receiver.
-    @inlinable func toggleBit(_ bit: Int) -> Integer { self ^ (1 << bit) }
+    @inlinable func toggleBit(_ bit: Int) -> Self { self ^ (1 << bit) }
     
-    @inlinable static public func ** (base: Integer, power: Integer) -> Integer { base.power(power) }
+    @inlinable static public func ** (base: Self, power: Self) -> Self { base.power(power) }
     
 }
 
@@ -1063,7 +1076,7 @@ extension Integer : CustomDebugStringConvertible {
         for i in 0..<digit.count {
             s += "\(digit[i]) "
         }
-        s += ", base=\(Integer.base)"
+        s += ", base=\(Self.base)"
         return s
     }
 }
@@ -1073,28 +1086,43 @@ extension Integer : ExpressibleByStringLiteral {
 }
 
 extension Integer : Comparable {
-    static public func == (lhs: Integer, rhs: Integer) -> Bool { lhs.isEqual(rhs) }
-    static public func < (lhs: Integer, rhs: Integer) -> Bool  { lhs.cmp(rhs) == -1 }
+	static public func == (lhs: Self, rhs: Self) -> Bool { lhs.isEqual(rhs) }
+    static public func < (lhs: Self, rhs: Self) -> Bool  { lhs.cmp(rhs) == -1 }
 }
 
-extension Integer : Hashable {
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(digit)
-        hasher.combine(negative)
-    }
-}
+extension Integer : Hashable { }
 
 extension Integer : ExpressibleByIntegerLiteral {
-    public init(integerLiteral value: Int) { self.init(value) }
+	public init(integerLiteral value: StaticBigInt) {
+		let isNegative = value.signum() < 0
+		let bitWidth = value.bitWidth
+		if bitWidth < Int.bitWidth {
+			self.init(Int(bitPattern: value[0]))
+		} else {
+			// handle large integer literals
+			let bitsPerWord = value[0].bitWidth
+			let noOfWords = (bitWidth / bitsPerWord) + 1
+			var integer = Self.zero
+			for index in (0..<noOfWords).reversed() {
+				integer = integer.lShift(bitsPerWord)
+				let word = isNegative ? ~value[index] : value[index]
+				integer = integer.add(Self(word))
+				// print(integer)
+			}
+			// self.init(digits: words, negative: false)
+			if isNegative { integer += 1; integer = integer.negate() }
+			self = integer
+		}
+	}
 }
 
 extension Integer : SignedInteger {
     
-    @inlinable public var magnitude: Integer { abs() }
+    @inlinable public var magnitude: Self { abs }
     
     /// Creates an Integer whose value is exactly equal to *value*.
     public init<T>(exactly value: T) where T : BinaryInteger {
-        let maxDigits = (MemoryLayout<T>.size*8+Int(Integer.shift)-2) / Int(Integer.shift)
+        let maxDigits = (MemoryLayout<T>.size*8+Int(Self.shift)-2) / Int(Self.shift)
         var lvalue = value
         var i = 0
         
@@ -1102,7 +1130,7 @@ extension Integer : SignedInteger {
         self.init(size: maxDigits, negative: value < 0)
         if value < 0 {
             let newValue = lvalue.magnitude
-            let b = T.Magnitude(Integer.base)
+            let b = T.Magnitude(Self.base)
             let x = newValue.quotientAndRemainder(dividingBy: b)
             digit[0] = Digit(x.remainder)
             lvalue = T(x.quotient)
@@ -1110,7 +1138,7 @@ extension Integer : SignedInteger {
         }
         
         /* extract the digits */
-        let base = T(Integer.base)
+        let base = T(Self.base)
         while lvalue != 0 {
             let x = lvalue.quotientAndRemainder(dividingBy: base)
             digit[i] = Digit(x.remainder)
@@ -1118,25 +1146,20 @@ extension Integer : SignedInteger {
             i += 1
         }
         digit.removeLast(maxDigits-i) // normalize number
-//        digit.removeSubrange(i..<maxDigits)
     }
     
-    private func negate() -> Integer {
+    private func negate() -> Self {
         var z = self
         z.negative = !negative
         return z
     }
     
-    @inlinable static public func *= (a: inout Integer, b: Integer) { a = a * b }
-    static public prefix func - (a: Integer) -> Integer             { a.negate() }
-    @inlinable static public func -= (a: inout Integer, b: Integer) { a = a - b }
+    @inlinable static public func *= (a: inout Self, b: Self) { a = a * b }
     
-    @inlinable static public prefix func + (a: Integer) -> Integer  { a }
-    @inlinable static public func += (a: inout Integer, b: Integer) { a = a + b }
-    
-    @inlinable static public func * (lhs: Integer, rhs: Integer) -> Integer { lhs.mul(rhs) }
-    @inlinable static public func + (lhs: Integer, rhs: Integer) -> Integer { lhs.add(rhs) }
-    @inlinable static public func - (lhs: Integer, rhs: Integer) -> Integer { lhs.add(-rhs) }
+    @inlinable static public func * (lhs: Self, rhs: Self) -> Self { lhs.mul(rhs) }
+    @inlinable static public func + (lhs: Self, rhs: Self) -> Self { lhs.add(rhs) }
+			   static public prefix func - (a: Self)  	   -> Self { a.negate() }
+    @inlinable static public func - (lhs: Self, rhs: Self) -> Self { lhs.add(-rhs) }
 }
 
 extension Integer : BinaryInteger {
@@ -1144,13 +1167,13 @@ extension Integer : BinaryInteger {
     public static var isSigned: Bool { true }
     public typealias Words = [UInt]
     
-    public var bitWidth: Int { digit.count*Int(Integer.shift) }
+    public var bitWidth: Int { digit.count*Int(Self.shift) }
     public var trailingZeroBitCount: Int {
         var zeros = 0
         for dig in digit {
             if dig == 0 {
                 // add full word bits
-                zeros += Int(Integer.shift)
+                zeros += Int(Self.shift)
             } else {
                 // add partial bits
                 zeros += dig.trailingZeroBitCount
@@ -1160,57 +1183,55 @@ extension Integer : BinaryInteger {
         return zeros
     }
     public var leadingZeroBitCount: Int { digit.last?.leadingZeroBitCount ?? 0 }
-    public var nonzeroBitCount: Int { digit.reduce(0) { $0 + $1.nonzeroBitCount } }
-    public var isPowerOfTwo: Bool { self.nonzeroBitCount == 1 }
+    public var nonzeroBitCount: Int  	{ digit.reduce(0) { $0 + $1.nonzeroBitCount } }
+	public var isPowerOfTwo: Bool   	{ self.nonzeroBitCount == 1 }
     
     public var words : Words { digit.map { UInt($0) } }
-    public init<T>(_ source: T) where T : BinaryInteger { self.init(exactly: source) }
+    public init<T:BinaryInteger>(_ source: T) { self.init(exactly: source) }
      
-    public init<T>(_ source: T) where T : BinaryFloatingPoint {
+    public init<T:BinaryFloatingPoint>(_ source: T) {
         var x = source.rounded(.towardZero)  // truncate any decimals
         let sign = x.sign
         if sign == .minus { x.negate() }
         self.init()
         
-        var int = Integer.zero
-        let scale = Integer.base
-        var iscale = Integer.one
+        var int = Self.zero
+        let scale = Self.base
+        var iscale = Self.one
         while x > 0 {
             let rem = x.truncatingRemainder(dividingBy: T(scale))
             x = (x - rem) / T(scale)
-            int += iscale * Integer(Int(rem))
-            iscale *= Integer(scale)
+            int += iscale * Self(Int(rem))
+            iscale *= Self(scale)
         }
         self = sign == .minus ? -int : int
     }
     
-    public init<T>(clamping source: T) where T : BinaryInteger { self.init(exactly: source) }
+    public init<T:BinaryInteger>(clamping source: T) { self.init(exactly: source) }
     
-    public init?<T>(exactly source: T) where T : BinaryFloatingPoint {
-        guard source.exponent > 0 && 50 >= source.significandWidth, source.isNormal, source.isFinite else { return nil }
+    public init?<T:BinaryFloatingPoint>(exactly source: T) {
+        guard source.exponent > 0 && 50 >= source.significandWidth,
+				source.isNormal, source.isFinite else { return nil }
         self.init(source)
     }
     
-    @inlinable public init<T>(truncatingIfNeeded source: T) where T : BinaryInteger { self.init(exactly: source) }
+	@inlinable public init<T:BinaryInteger>(truncatingIfNeeded source: T) { self.init(exactly: source) }
     
-    @inlinable static public func % (lhs: Integer, rhs: Integer) -> Integer { lhs.mod(rhs) }
-    @inlinable public static func %= (lhs: inout Integer, rhs: Integer) { lhs = lhs % rhs }
+    @inlinable static public func % (lhs: Self, rhs: Self) -> Self { lhs.mod(rhs) }
+    @inlinable public static func %= (lhs: inout Self, rhs: Self)  { lhs = lhs % rhs }
     
-    @inlinable static public func / (lhs: Integer, rhs: Integer) -> Integer { lhs.div(rhs) }
-    @inlinable static public func /= (a: inout Integer, b: Integer) { a = a / b }
+    @inlinable static public func / (lhs: Self, rhs: Self) -> Self { lhs.div(rhs) }
+    @inlinable static public func /= (a: inout Self, b: Self)      { a = a / b }
     
-    @inlinable static public func & (a: Integer, b: Integer) -> Integer { a.and(b) }
-    @inlinable public static func &= (lhs: inout Integer, rhs: Integer) { lhs = lhs & rhs }
-    @inlinable public static func |= (lhs: inout Integer, rhs: Integer) { lhs = lhs | rhs }
-    @inlinable public static func ^= (lhs: inout Integer, rhs: Integer) { lhs = lhs ^ rhs }
+	@inlinable public static func &= (lhs: inout Self, rhs: Self) { lhs = lhs.and(rhs) }
+	@inlinable public static func |= (lhs: inout Self, rhs: Self) { lhs = lhs.or(rhs) }
+	@inlinable public static func ^= (lhs: inout Self, rhs: Self) { lhs = lhs.xor(rhs) }
     
-    @inlinable static public func | (a: Integer, b: Integer) -> Integer { a.or(b) }
-    @inlinable static public func ^ (a: Integer, b: Integer) -> Integer { a.xor(b) }
-    @inlinable static public prefix func ~ (a: Integer) -> Integer { a.invert() }
+    @inlinable static public prefix func ~ (a: Self) -> Self   { a.invert() }
     
-    @inlinable static public func << (a: Integer, b: Int) -> Integer { a.lShift(b) }
-    @inlinable static public func >> (a: Integer, b: Int) -> Integer { a.rShift(b) }
-    @inlinable public static func <<= <RHS>(lhs: inout Integer, rhs: RHS) where RHS : BinaryInteger { lhs = lhs.lShift(Int(rhs)) }
-    @inlinable public static func >>= <RHS>(lhs: inout Integer, rhs: RHS) where RHS : BinaryInteger { lhs = lhs.rShift(Int(rhs)) }
+	@inlinable static public func << <I:BinaryInteger>(a: Self, b: I) -> Self { a.lShift(Int(b)) }
+	@inlinable static public func >> <I:BinaryInteger>(a: Self, b: I) -> Self { a.rShift(Int(b)) }
+	@inlinable public static func <<= <I:BinaryInteger>(lhs: inout Self, rhs: I) { lhs = lhs.lShift(Int(rhs)) }
+	@inlinable public static func >>= <I:BinaryInteger>(lhs: inout Self, rhs: I) { lhs = lhs.rShift(Int(rhs)) }
 }
 
