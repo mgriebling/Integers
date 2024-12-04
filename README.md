@@ -3,18 +3,26 @@
 Implements integer values of arbitrary magnitude. Includes all standard arithmetic and logic operations.
 The *Integer* type is compliant to the *BinaryInteger* and *SignedInteger* Swift protocols.
 A preliminary version of rational numbers is also included with basic arithmetic operations.
-Original Oberon-2 source Copyright © 2002, 2003, 2015 Michael van Acken and Michael Griebling
-Ported to Swift by Michael Griebling, 18 July 2015.
-Swift source Copyright © 2015 - 2022 Michael Griebling
+Ported to Swift from an original Oberon-2 library by Michael Griebling, 18 July 2015.
 
 This module is a reformulation of (parts of) Python's *longobject.c* in Swift. Optimizations like 
-Karatsuba multiplication have been omitted.  All errors are mine, of course.
+Karatsuba multiplication have been omitted.
 
-Added algorithms are from Knuth: _The Art Of Computer Programming_, Vol 2, section 4.3.1
+Added algorithms are from Knuth: _The Art Of Computer Programming_, Vol 2, section 4.3.1 and
+_Applied Cryptography_ by Bruce Schneier.
+
+## Features
+
+1. Arbitrary-precision integers implemented entirely with Swift supporting the
+   Codable, Sendable, Hashable, SignedInteger and BinaryInteger protocols.
+2. Includes all basic mathematical functions plus prime factoring, factorial, greatest
+   common denominator, powers, square root, and radix conversions to/from strings.
+3. Supports `StaticBigInt` initialization allowing large number literals.
+
 
 ## Timing
 
-Some typical performance tests were run on a 3.6 GHz 10-Core Intel Core i9 Mac using Catalyst.
+Some typical performance tests were run on a 3.6 GHz 10-Core Intel Core i9 Mac.
 As a comparison, the same benchmarks were also run using the *BigInt* package by Matthias Zenger.
 In both cases source code is 100% Swift.
 
@@ -22,9 +30,10 @@ The *Integer* package optimizes the integer power function using 5-ary exponenti
 Number squaring functions have been optimized to be about twice as fast as just multiplying two numbers.
 String to integer conversions for power-of-two bases are about twice as fast as other conversions.
 
-**Results  String to Integer (100 digits, base 10)  Factorial(999)**
-Integer                     192 μS                       19 mS
-BigInt                      461 μS                      167 mS
+| Results  | String to Integer (100 digits, base 10) | Factorial(999) |
+|:---------|----------------------------------------:|---------------:|
+| Integer  |                   192 μS                |       19 mS	  |
+| BigInt   |                   461 μS                |      167 mS	  |
 
 ## Examples
 

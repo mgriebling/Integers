@@ -20,6 +20,13 @@
             // Put teardown code here. This method is called after the invocation of each test method in the class.
             super.tearDown()
         }
+		
+		func testMaxPowers() {
+			let x = Integer(100)
+			for i in 2...36 {
+				let _ = x.description(i)
+			}
+		}
         
         func testIntegers() {
             // This is an example of a functional test case.
@@ -42,7 +49,6 @@
                 if pass { print(a, n.description(base), " -> PASS") }
                 XCTAssert(pass, "\(a)\(n.description(base)) -> FAIL!")
             }
-            
             check("Zero = ", Integer.zero, "0")
             check("One = ", Integer.one, "1")
             let ns = "123456789012345678900000000000000000000"
@@ -73,6 +79,7 @@
             let ffff = Integer("-0xFFFF")   // or 0x-FFFF will also work
             check("-FFFF = ", ffff, "-65535")
             check2("-FFFF = ", ffff, 16, "-FFFF")
+			check2("FEDCBA9876543210", Integer(0xFEDC_BA98_7654_3210), 16, "FEDCBA9876543210")
             let n2 = Integer("-10000000000000", withBase:10)
             check("-10000000000000 = ", n2, "-10000000000000")
             let n3 = Integer("-10000000000000000", withBase: 2)
@@ -135,6 +142,16 @@
             print(x)
         }
 		
+		func testPerformanceToHexString() {
+			let x = Integer(69).factorial()
+			var y = ""
+			self.measure {
+				// Put the code you want to measure the time of here.
+				for _ in 1...1000 { y = x.description(16) }
+			}
+			print(y)
+		}
+		
 		func testPerformanceToString() {
 			let x = Integer(69).factorial()
 			var y = ""
@@ -144,18 +161,8 @@
 			}
 			print(y)
 		}
-        
-		// Same as x.sqr - `*` is optimized internally
-//        func testSquaring1() {
-//            let x = Integer(s)
-//            var y = Integer.zero
-//            self.measure {
-//                for _ in 1...1000 { y = x*x }
-//            }
-//            print(y)
-//        }
 
-        func testSquaring2() {
+        func testSquaring() {
             let x = Integer(s)
             var y = Integer.zero
             self.measure {

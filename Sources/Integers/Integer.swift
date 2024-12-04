@@ -61,7 +61,7 @@ public struct Integer : Codable, Sendable {
     private var digit: Digits
 	private var negative: Bool
     
-    static public let one = Self(1)
+    static public let one = Self(1) // Note: zero is defined automatically
     
     /// Creates an Integer composed of *size* `Digit`s where each `Digit` holds
     /// 30 bits or around 9 decimal digits. When non-empty, `digits` supplies
@@ -141,7 +141,7 @@ public struct Integer : Codable, Sendable {
 	public var isNegative : Bool { negative }
 	public var abs : Self   	 { negative ? -self : self }
     
-    /// Returns a *Int* approximation of *self* where
+    /// Returns an *Int* approximation of *self* where
     /// very small/large values may return *Int.min* or *Int.max*, respectively.
     public var integer : Int {
         let limit = Int.max / Int(Self.base)
@@ -450,57 +450,140 @@ public struct Integer : Codable, Sendable {
     @inlinable func divMod (_ w: Self) -> (div: Self, mod: Self) { Self.divRem(self, b:w) }
     
 	/// Division.
-    @inlinable func div (_ w: Self) -> Self {
-        let (div, _) = self.divMod(w)
-        return div
-    } // Div;
+    @inlinable func div (_ w: Self) -> Self { self.divMod(w).div }
     
 	/// Modulo.
-    @inlinable func mod (_ w: Self) -> Self {
-        let (_, mod) = self.divMod(w)
-        return mod
-    } // Mod;
+    @inlinable func mod (_ w: Self) -> Self { self.divMod(w).mod }
+	
+	/// Maximum value of rⁿ where `r `is the radix and `n` is the power
+	private static let _maxPowers = [0, 0, // these are ignored
+		 536_870_912, // Radix: 2
+		 387_420_489, // Radix: 3
+		 268_435_456, // Radix: 4
+		 244_140_625, // Radix: 5
+		 362_797_056, // Radix: 6
+		 282_475_249, // Radix: 7
+		 134_217_728, // Radix: 8
+		 387_420_489, // Radix: 9
+	   1_000_000_000, // Radix: 10
+		 214_358_881, // Radix: 11
+		 429_981_696, // Radix: 12
+		 815_730_721, // Radix: 13
+		 105_413_504, // Radix: 14
+		 170_859_375, // Radix: 15
+		 268_435_456, // Radix: 16
+		 410_338_673, // Radix: 17
+		 612_220_032, // Radix: 18
+		 893_871_739, // Radix: 19
+		  64_000_000, // Radix: 20
+		  85_766_121, // Radix: 21
+		 113_379_904, // Radix: 22
+		 148_035_889, // Radix: 23
+		 191_102_976, // Radix: 24
+		 244_140_625, // Radix: 25
+		 308_915_776, // Radix: 26
+		 387_420_489, // Radix: 27
+		 481_890_304, // Radix: 28
+		 594_823_321, // Radix: 29
+		 729_000_000, // Radix: 30
+		 887_503_681, // Radix: 31
+		  33_554_432, // Radix: 32
+		  39_135_393, // Radix: 33
+		  45_435_424, // Radix: 34
+		  52_521_875, // Radix: 35
+		  60_466_176, // Radix: 36
+	]
+	
+	private static let _maxDigits = [0,0, // unused
+	   // maximum bits in Digit for radix 2...36 without overflowing
+	   29, 18,14, 12, 11, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6,
+	   6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5,
+	]
     
     /** Convert an *Integer* object to a string, using a given conversion base
 		where `2 ≤ outputBase ≤ 36`
 	 */
     public func description (_ outputBase: Int) -> String {
+		let generateTable = false
         var str = ""
         let sizeA = self.digit.count
-        assert(outputBase >= 2 && outputBase <= 36, "\(#function): 2 ≤ base ≤ 36")
+		precondition(outputBase >= 2 && outputBase <= 36, "\(#function): 2 ≤ base ≤ 36")
         
         if sizeA == 0 {
             return "0"
-        } else if outputBase & (outputBase-1) == 0 {
+        } else if !generateTable && (outputBase & (outputBase-1) == 0) {
             // special case where radix is power of two
-            let baseBits = outputBase.trailingZeroBitCount
-            let mask = TwoDigits(outputBase - 1)
-            var accum: TwoDigits = 0
-            var accumBits = TwoDigits(0)
-            
-            for i in 0..<sizeA {
-                accum |= TwoDigits(digit[i]) << accumBits
-                accumBits += TwoDigits(Self.shift)
-                assert(accumBits >= baseBits, "\(#function): Failed power of two check")
-                repeat {
-                    let d = Int(accum & mask)
-                    assert(d >= 0, "\(#function): d < 0")
-                    let c = Self.baseDigits[d]
-                    str = String(c) + str
-                    accumBits -= TwoDigits(baseBits)
-                    accum = accum >> TwoDigits(baseBits)
-                } while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
-            }
+			let bits = self.bitWidth
+			let blankBits = Digit.bitWidth - bits
+			var totalBits = bits - self.leadingZeroBitCount + blankBits
+			let baseBits = outputBase.trailingZeroBitCount
+			var digits = totalBits / baseBits
+			var digitBits = digits * baseBits
+			var mask = (1 << digitBits) - 1
+			let digitsPerWord = Int(Self.shift) / baseBits
+			let extraBitsPerWord = Int(Self.shift) - digitsPerWord * baseBits
+//			let baseDigitsPerWord = 64 / baseBits
+//			let remainder = totalBits - digits * baseBits
+			var accum: UInt64 = 0
+//			var accumBits: UInt64 = 0
+			var extraBits = 0
+			
+			for i in 0..<sizeA {
+//				if totalBits <= Self.shift {
+//					// mask = Int(Self.mask)
+//					// digitBits = Int(Self.shift)
+//					accum = UInt64(digit[i])
+//				} else {
+					accum |= UInt64(digit[i]) << extraBits
+					//digits = (Int(Self.shift) + extraBits) / baseBits
+					//digitBits = digits * baseBits
+					extraBits = extraBitsPerWord
+					mask = (1 << digitBits) - 1
+//				}
+				// assert(accumBits >= baseBits, "\(#function): Failed power of two check")
+//				repeat {
+//					let d = Int(accum & UInt64((1<<baseBits)-1))
+//					assert(d >= 0, "\(#function): d < 0")
+					let c = String(accum & UInt64(mask), radix: outputBase, uppercase: true)
+					str = String(c) + str
+				    totalBits -= digitBits
+				    accum >>= digitBits
+//				} while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
+			}
+//			let baseBits = outputBase.trailingZeroBitCount
+//			let mask = TwoDigits(outputBase - 1)
+//			var accum: TwoDigits = 0
+//			var accumBits = TwoDigits(0)
+//			
+//			for i in 0..<sizeA {
+//				accum |= TwoDigits(digit[i]) << accumBits
+//				accumBits += TwoDigits(Self.shift)
+//				assert(accumBits >= baseBits, "\(#function): Failed power of two check")
+//				repeat {
+//					let d = Int(accum & mask)
+//					assert(d >= 0, "\(#function): d < 0")
+//					let c = Self.baseDigits[d]
+//					str = String(c) + str
+//					accumBits -= TwoDigits(baseBits)
+//					accum = accum >> TwoDigits(baseBits)
+//				} while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
+//			}
         } else {
             /* powbase <- largest power of outputBase that fits in a Digit. */
-            var powbase = outputBase  /* powbase == outputBase ** power */
-            var power = 1
-            while true {
-                let temp = powbase * outputBase
-                if temp > Int(Self.base) { break }
-                powbase = temp
-                power += 1
-            }
+			let power = Self._maxDigits[outputBase]	  // maximum power of powbase
+			let powbase = Self._maxPowers[outputBase] // outputBase ** power
+         
+			if generateTable {
+				var power = 1
+				var powbase = outputBase
+				while true {
+					let temp = powbase * outputBase
+					if temp >= Int(Self.base) { break }
+					powbase = temp
+					power += 1
+				}
+				print("Max number: \(powbase) power: \(power) Radix: \(outputBase)")
+			}
             
             /* Get a scratch area for repeated division. */
             var scratch = self
@@ -508,27 +591,15 @@ public struct Integer : Codable, Sendable {
             
             /* Repeatedly divide by powbase. */
             repeat {
-                var ntostore = power
-                var rem = Self.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
+				let rem = Self.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
                 if scratch.digit[size-1] == 0 { size -= 1 }
                 
                 /* Break rem into digits. */
-                assert(ntostore > 0, "\(#function): ntostore <= 0")
-                repeat {
-                    let nextrem = rem / Digit(outputBase)
-                    let d = rem - nextrem * Digit(outputBase)
-                    assert(d >= 0, "(\(#function) d < 0")
-                    let c = Self.baseDigits[Int(d)]
-                    str = String(c) + str
-                    rem = nextrem
-                    ntostore -= 1
-                    /* Termination is a bit delicate:  must not
-                    store leading zeroes, so must get out if
-                    remaining quotient and rem are both 0. */
-                } while !((ntostore == 0) || (size == 0 && rem == 0))
+				let remstr = String(rem)
+				let padding = size == 0 ? "" : "".padding(toLength: power-remstr.count, withPad: "0", startingAt: 0)
+				str = padding + remstr + str
             } while size > 0
         }
-        
         return negative ? "-" + str : str
     }
     
@@ -538,7 +609,7 @@ public struct Integer : Codable, Sendable {
         
         var negative = false
         
-        /* uppercase and skip leading whitespace */
+        /* skip leading whitespace and underscores */
         var s = str.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "_", with: "")
         
         /* handle sign */
@@ -923,23 +994,17 @@ public struct Integer : Codable, Sendable {
         return facts
     }()
     
-    ///  log(10) / log(2)
-    static let log10overLog2 = 3.321928095
-    
     /// Returns the number of Digits needed to hold *decimalDigits*.
-    static func toDigits(decimalDigits:Int) -> Int {
-        let ndigits = log10overLog2 / Double(shift)                       // number of Digits per base 10 digit
-        return Swift.max(1,Int(round(Double(decimalDigits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
+	static func numberOfDigits<T:BinaryInteger>(inDecimal digits:T) -> Int {
+		let log10overLog2 = 3.321928095   //  log(10) / log(2)
+        let ndigits = log10overLog2 / Double(shift) // number of Digits per base 10 digit
+        return Swift.max(1,Int(round(Double(digits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
     }
     
-    /// Returns the number of Digits needed to hold *decimalDigits*.
-    static func toDigits(decimalDigits:Self) -> Int {
-        let ndigits = log10overLog2 / Double(shift)                       // number of Digits per base 10 digit
-        return Swift.max(1,Int(round(Double(decimalDigits)*ndigits+0.5))) // n size = digits*log(10)/log(2)
-    }
-    
-    static func toDecimalDigits(digits:Int) -> Int {
-        let ndigits = Double(shift) / log10overLog2     // number of base 10 digits per Digit
+	/// Returns the number of decimal digits in `digits``Digit`s
+    static func decimalDigits(in digits:Int) -> Int {
+		let log2overLog10 = 0.3010299956639   //  log(2) / log(10)
+        let ndigits = Double(shift) * log2overLog10 // number of base 10 digits per Digit
         return Swift.max(1,Int(round(Double(digits)*ndigits+0.5))) // n size = digits*log(2)/log(10)
     }
     
@@ -947,7 +1012,7 @@ public struct Integer : Codable, Sendable {
     public static func random (_ range:ClosedRange<Self>) -> Self {
         let digits = range.upperBound.digit.count
         let size = Int.random(in: 1...digits)  // pick a random size
-        let number = Self.random(digits:toDecimalDigits(digits:size)) % (range.upperBound+1)
+        let number = Self.random(digits:decimalDigits(in:size)) % (range.upperBound+1)
         if number < range.lowerBound { return number+range.lowerBound }
         return number
     }
@@ -974,13 +1039,13 @@ public struct Integer : Codable, Sendable {
     public static func random (digits: Int = defaultDigits) -> Self {
         let B = mask
         let udigits = digits <= 0 ? defaultDigits : digits
-        var n = Self(size: toDigits(decimalDigits: udigits))
+        var n = Self(size: numberOfDigits(inDecimal: udigits))
 
         // create the random Digits
         for i in 0..<n.digit.count { n.digit[i] = Digit(Int.random(in: 0..<Int(B))) }
         
         // adjust the size to decimal digit places
-        let aDigits = toDecimalDigits(digits: n.digit.count)
+        let aDigits = decimalDigits(in: n.digit.count)
         if aDigits > udigits { n /= 10 ** (aDigits - udigits) }
         return n
     }
@@ -1093,6 +1158,7 @@ extension Integer : Comparable {
 extension Integer : Hashable { }
 
 extension Integer : ExpressibleByIntegerLiteral {
+	
 	public init(integerLiteral value: StaticBigInt) {
 		let isNegative = value.signum() < 0
 		let bitWidth = value.bitWidth
@@ -1110,7 +1176,7 @@ extension Integer : ExpressibleByIntegerLiteral {
 				// print(integer)
 			}
 			// self.init(digits: words, negative: false)
-			if isNegative { integer += 1; integer = integer.negate() }
+			if isNegative { integer += 1; integer = integer.negate }
 			self = integer
 		}
 	}
@@ -1148,24 +1214,23 @@ extension Integer : SignedInteger {
         digit.removeLast(maxDigits-i) // normalize number
     }
     
-    private func negate() -> Self {
-        var z = self
-        z.negative = !negative
-        return z
-    }
-    
-    @inlinable static public func *= (a: inout Self, b: Self) { a = a * b }
-    
-    @inlinable static public func * (lhs: Self, rhs: Self) -> Self { lhs.mul(rhs) }
-    @inlinable static public func + (lhs: Self, rhs: Self) -> Self { lhs.add(rhs) }
-			   static public prefix func - (a: Self)  	   -> Self { a.negate() }
-    @inlinable static public func - (lhs: Self, rhs: Self) -> Self { lhs.add(-rhs) }
+	@inlinable static public prefix func - (a: Self) -> Self { a.negate }
+    @inlinable static public func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
+    @inlinable static public func *  (lhs: Self, rhs: Self) -> Self { lhs.mul(rhs) }
+    @inlinable static public func +  (lhs: Self, rhs: Self) -> Self { lhs.add(rhs) }
+    @inlinable static public func -  (lhs: Self, rhs: Self) -> Self { lhs.add(-rhs) }
 }
 
 extension Integer : BinaryInteger {
     
     public static var isSigned: Bool { true }
     public typealias Words = [UInt]
+	
+	public var negate: Self {
+		var z = self
+		z.negative = !negative
+		return z
+	}
     
     public var bitWidth: Int { digit.count*Int(Self.shift) }
     public var trailingZeroBitCount: Int {
