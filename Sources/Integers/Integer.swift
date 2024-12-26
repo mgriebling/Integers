@@ -496,7 +496,7 @@ public struct Integer : Codable, Sendable {
 	
 	private static let _maxDigits = [0,0, // unused
 	   // maximum bits in Digit for radix 2...36 without overflowing
-	   29, 18,14, 12, 11, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6,
+	   29, 18, 14, 12, 11, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6,
 	   6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5,
 	]
     
@@ -504,101 +504,66 @@ public struct Integer : Codable, Sendable {
 		where `2 ≤ outputBase ≤ 36`
 	 */
     public func description (_ outputBase: Int) -> String {
-		let generateTable = false
+		//let generateTable = false
         var str = ""
         let sizeA = self.digit.count
-		precondition(outputBase >= 2 && outputBase <= 36, "\(#function): 2 ≤ base ≤ 36")
+		precondition((2...36).contains(outputBase), "\(#function): 2 ≤ base ≤ 36")
         
         if sizeA == 0 {
             return "0"
-        } else if !generateTable && (outputBase & (outputBase-1) == 0) {
+        } else if outputBase & (outputBase-1) == 0 {
             // special case where radix is power of two
-			let bits = self.bitWidth
-			let blankBits = Digit.bitWidth - bits
-			var totalBits = bits - self.leadingZeroBitCount + blankBits
 			let baseBits = outputBase.trailingZeroBitCount
-			var digits = totalBits / baseBits
-			var digitBits = digits * baseBits
-			var mask = (1 << digitBits) - 1
-			let digitsPerWord = Int(Self.shift) / baseBits
-			let extraBitsPerWord = Int(Self.shift) - digitsPerWord * baseBits
-//			let baseDigitsPerWord = 64 / baseBits
-//			let remainder = totalBits - digits * baseBits
-			var accum: UInt64 = 0
-//			var accumBits: UInt64 = 0
-			var extraBits = 0
+			let mask = TwoDigits(outputBase - 1)
+			var accum: TwoDigits = 0
+			var accumBits = TwoDigits(0)
 			
 			for i in 0..<sizeA {
-//				if totalBits <= Self.shift {
-//					// mask = Int(Self.mask)
-//					// digitBits = Int(Self.shift)
-//					accum = UInt64(digit[i])
-//				} else {
-					accum |= UInt64(digit[i]) << extraBits
-					//digits = (Int(Self.shift) + extraBits) / baseBits
-					//digitBits = digits * baseBits
-					extraBits = extraBitsPerWord
-					mask = (1 << digitBits) - 1
-//				}
-				// assert(accumBits >= baseBits, "\(#function): Failed power of two check")
-//				repeat {
-//					let d = Int(accum & UInt64((1<<baseBits)-1))
-//					assert(d >= 0, "\(#function): d < 0")
-					let c = String(accum & UInt64(mask), radix: outputBase, uppercase: true)
-					str = String(c) + str
-				    totalBits -= digitBits
-				    accum >>= digitBits
-//				} while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
+				accum |= TwoDigits(digit[i]) << accumBits
+				accumBits += TwoDigits(Self.shift)
+				precondition(accumBits >= baseBits, "\(#function): Failed power of two check")
+				repeat {
+					let d = Int(accum & mask)
+					precondition(d >= 0, "\(#function): d < 0")
+					str = String(d, radix: outputBase, uppercase: true) + str
+					accumBits -= TwoDigits(baseBits)
+					accum = accum >> TwoDigits(baseBits)
+				} while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
 			}
-//			let baseBits = outputBase.trailingZeroBitCount
-//			let mask = TwoDigits(outputBase - 1)
-//			var accum: TwoDigits = 0
-//			var accumBits = TwoDigits(0)
-//			
-//			for i in 0..<sizeA {
-//				accum |= TwoDigits(digit[i]) << accumBits
-//				accumBits += TwoDigits(Self.shift)
-//				assert(accumBits >= baseBits, "\(#function): Failed power of two check")
-//				repeat {
-//					let d = Int(accum & mask)
-//					assert(d >= 0, "\(#function): d < 0")
-//					let c = Self.baseDigits[d]
-//					str = String(c) + str
-//					accumBits -= TwoDigits(baseBits)
-//					accum = accum >> TwoDigits(baseBits)
-//				} while !((accumBits < baseBits) && (i < sizeA-1) || (accum == 0))
-//			}
         } else {
             /* powbase <- largest power of outputBase that fits in a Digit. */
-			let power = Self._maxDigits[outputBase]	  // maximum power of powbase
-			let powbase = Self._maxPowers[outputBase] // outputBase ** power
-         
-			if generateTable {
-				var power = 1
-				var powbase = outputBase
-				while true {
-					let temp = powbase * outputBase
-					if temp >= Int(Self.base) { break }
-					powbase = temp
-					power += 1
-				}
-				print("Max number: \(powbase) power: \(power) Radix: \(outputBase)")
-			}
-            
-            /* Get a scratch area for repeated division. */
-            var scratch = self
-            var size = sizeA
-            
-            /* Repeatedly divide by powbase. */
-            repeat {
-				let rem = Self.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
-                if scratch.digit[size-1] == 0 { size -= 1 }
-                
-                /* Break rem into digits. */
-				let remstr = String(rem)
-				let padding = size == 0 ? "" : "".padding(toLength: power-remstr.count, withPad: "0", startingAt: 0)
-				str = padding + remstr + str
-            } while size > 0
+			let powbase = Self._maxPowers[outputBase]  /* powbase == outputBase ** power */
+			let power = Self._maxDigits[outputBase]
+//			while true {
+//				let temp = powbase * outputBase
+//				if temp > Int(Self.base) { break }
+//				powbase = temp
+//				power += 1
+//			}
+			
+			/* Get a scratch area for repeated division. */
+			var scratch = self
+			var size = sizeA
+			
+			/* Repeatedly divide by powbase. */
+			repeat {
+				var ntostore = power
+				var rem = Self.inplaceDivRem1(&scratch.digit, pin:scratch.digit, psize:size, n:Digit(powbase))
+				if scratch.digit[size-1] == 0 { size -= 1 }
+				
+				/* Break rem into digits. */
+				precondition(ntostore > 0, "\(#function): ntostore <= 0")
+				repeat {
+					let (nextrem, d) = rem.quotientAndRemainder(dividingBy: Digit(outputBase))
+					precondition(d >= 0, "(\(#function) d < 0")
+					str = String(d, radix: outputBase, uppercase: true) + str
+					rem = nextrem
+					ntostore -= 1
+					/* Termination is a bit delicate:  must not
+					store leading zeroes, so must get out if
+					remaining quotient and rem are both 0. */
+				} while !((ntostore == 0) || (size == 0 && rem == 0))
+			} while size > 0
         }
         return negative ? "-" + str : str
     }
